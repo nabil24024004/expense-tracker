@@ -106,49 +106,22 @@ object ExcelHelper {
         val workbook = HSSFWorkbook()
         val sheet = workbook.createSheet("Expenses")
 
-        // Styles
-        val headerFont = workbook.createFont().apply {
-            bold = true
-            color = IndexedColors.WHITE.getIndex()
-            fontHeightInPoints = 11.toShort()
-        }
-
-        val headerCellStyle = workbook.createCellStyle().apply {
-            setFont(headerFont)
-            fillForegroundColor = IndexedColors.INDIGO.getIndex()
-            fillPattern = FillPatternType.SOLID_FOREGROUND
-            alignment = HorizontalAlignment.CENTER
-            verticalAlignment = VerticalAlignment.CENTER
-        }
-
-        val dateCellStyle = workbook.createCellStyle().apply {
-            val creationHelper = workbook.creationHelper
-            dataFormat = creationHelper.createDataFormat().getFormat("yyyy-MM-dd HH:mm:ss")
-        }
-
-        val amountCellStyle = workbook.createCellStyle().apply {
-            val creationHelper = workbook.creationHelper
-            dataFormat = creationHelper.createDataFormat().getFormat("#,##0.00")
-        }
-
         // Header Row
         val headerRow = sheet.createRow(0)
         val headers = listOf("Date", "Category", "Description", "Amount")
         for (i in headers.indices) {
             val cell = headerRow.createCell(i)
             cell.setCellValue(headers[i])
-            cell.cellStyle = headerCellStyle
         }
 
         // Data Rows
         var rowIndex = 1
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         for (expense in expenses) {
             val row = sheet.createRow(rowIndex++)
 
-            // Date
-            val dateCell = row.createCell(0)
-            dateCell.setCellValue(Date(expense.date))
-            dateCell.cellStyle = dateCellStyle
+            // Date (write formatted string directly)
+            row.createCell(0).setCellValue(sdf.format(Date(expense.date)))
 
             // Category
             row.createCell(1).setCellValue(expense.category)
@@ -157,9 +130,7 @@ object ExcelHelper {
             row.createCell(2).setCellValue(expense.description)
 
             // Amount
-            val amountCell = row.createCell(3)
-            amountCell.setCellValue(expense.amount)
-            amountCell.cellStyle = amountCellStyle
+            row.createCell(3).setCellValue(expense.amount)
         }
 
         // Set manual column widths (in characters * 256) to avoid AWT autoSizeColumn crashes on Android

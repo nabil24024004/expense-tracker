@@ -2167,10 +2167,10 @@ fun HistoryTab(
                             }
                         }
                     }
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     withContext(Dispatchers.Main) {
                         isImporting = false
-                        Toast.makeText(context, "Error: ${e.localizedMessage ?: "Invalid file or structure"}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Import failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -2189,9 +2189,9 @@ fun HistoryTab(
                             Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
                         }
                     }
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Export failed: ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Export failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -2202,9 +2202,7 @@ fun HistoryTab(
         ExcelImportGuideDialog(
             onDismiss = { showImportGuide = false },
             onChooseFile = {
-                onRequestStoragePermission {
-                    importLauncher.launch("*/*")
-                }
+                importLauncher.launch("*/*")
             }
         )
     }
