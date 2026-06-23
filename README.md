@@ -40,3 +40,9 @@ The application is built on top of robust Android development frameworks and arc
 2. Open Android Studio, select **Open**, and navigate to the directory containing this project.
 3. Allow Android Studio to complete Gradle sync and project build configuration tasks.
 4. Build and run the app on an Android Emulator or a physical device.
+
+---
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
