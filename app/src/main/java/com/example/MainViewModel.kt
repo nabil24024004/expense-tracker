@@ -7,11 +7,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
 import com.example.data.Expense
 import com.example.data.ExpenseRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: ExpenseRepository
@@ -114,13 +116,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             repository.insert(newExpense)
 
-            val formattedAmount = String.format(java.util.Locale.US, "%,.2f", amount)
-            NotificationHelper.triggerLiveNotification(
-                getApplication(),
-                "Expense Logged",
-                "Successfully added: ৳$formattedAmount for $description ($category)"
-            )
-
             if (newTotal > limit && oldTotal <= limit) {
                 val formattedLimit = String.format(java.util.Locale.US, "%,.2f", limit)
                 val formattedNewTotal = String.format(java.util.Locale.US, "%,.2f", newTotal)
@@ -185,7 +180,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetAllData() {
         viewModelScope.launch {
-            database.clearAllTables()
+            withContext(Dispatchers.IO) {
+                database.clearAllTables()
+            }
             prefs.edit().clear().apply()
             isFirstLaunch.value = true
             userName.value = "Azwad"

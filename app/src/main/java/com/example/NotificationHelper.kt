@@ -10,10 +10,9 @@ object NotificationHelper {
     fun scheduleDailyReminders(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         
-
+        // 1. Morning Summary Alarm (8:30 AM)
         val intent1 = Intent(context, NotificationReceiver::class.java).apply {
-            putExtra("title", "Daily Budget Check")
-            putExtra("message", "Time to log your morning expenses and stay on track!")
+            putExtra("type", "morning")
         }
         val pendingIntent1 = PendingIntent.getBroadcast(
             context,
@@ -24,11 +23,12 @@ object NotificationHelper {
         
         val calendar1 = Calendar.getInstance().apply {
             timeInMillis = System.currentTimeMillis()
-            set(Calendar.HOUR_OF_DAY, 12)
-            set(Calendar.MINUTE, 0)
+            set(Calendar.HOUR_OF_DAY, 8)
+            set(Calendar.MINUTE, 30)
             set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
             if (before(Calendar.getInstance())) {
-                add(Calendar.DAY_OF_MONTH, 1)
+                add(Calendar.DAY_OF_YEAR, 1)
             }
         }
         
@@ -39,10 +39,9 @@ object NotificationHelper {
             pendingIntent1
         )
 
-
+        // 2. Evening Summary Alarm (11:00 PM)
         val intent2 = Intent(context, NotificationReceiver::class.java).apply {
-            putExtra("title", "Evening Budget Check")
-            putExtra("message", "Don't forget to log your dinner and evening expenses!")
+            putExtra("type", "evening")
         }
         val pendingIntent2 = PendingIntent.getBroadcast(
             context,
@@ -53,11 +52,12 @@ object NotificationHelper {
         
         val calendar2 = Calendar.getInstance().apply {
             timeInMillis = System.currentTimeMillis()
-            set(Calendar.HOUR_OF_DAY, 20)
+            set(Calendar.HOUR_OF_DAY, 23)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
             if (before(Calendar.getInstance())) {
-                add(Calendar.DAY_OF_MONTH, 1)
+                add(Calendar.DAY_OF_YEAR, 1)
             }
         }
         

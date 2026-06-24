@@ -70,6 +70,7 @@ import com.example.ui.components.SimpleBarChart
 import com.example.ui.components.SmoothLineChart
 import com.example.ui.theme.*
 import com.example.data.ExcelHelper
+import com.example.data.PdfHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -135,7 +136,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
     
     var currentTab by remember { mutableStateOf("home") }
     var showAddDialog by remember { mutableStateOf(false) }
-    var addDialogPrefillCategory by remember { mutableStateOf("Food") }
+    var addDialogPrefillCategory by remember { mutableStateOf("") }
     
 
     var showChatAssistant by remember { mutableStateOf(false) }
@@ -385,7 +386,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             interactionSource = fabInteractionSource,
                             indication = LocalIndication.current
                         ) {
-                            addDialogPrefillCategory = "Other"
+                            addDialogPrefillCategory = ""
                             showAddDialog = true
                         }
                         .border(1.dp, PrimaryAccent, CircleShape),
@@ -685,6 +686,42 @@ fun HomeTab(
     onShowNotifications: () -> Unit
 ) {
     val context = LocalContext.current
+    var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
+    var selectedFilter by remember { mutableStateOf("All") }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val displayExpenses = remember(expenses, selectedFilter) {
+        val todayStart = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        
+        val weekStart = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        
+        val monthStart = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        val filtered = when (selectedFilter) {
+            "Today" -> expenses.filter { it.date >= todayStart }
+            "This Week" -> expenses.filter { it.date >= weekStart }
+            "This Month" -> expenses.filter { it.date >= monthStart }
+            else -> expenses
+        }
+        filtered.take(4)
+    }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1162,31 +1199,49 @@ fun HomeTab(
                     color = TextPrimary
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onNavigate("history") }
-                        .background(CardSurface)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Today",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = TextPrimary
-                    )
-                    Icon(
-                        imageVector = Icons.Rounded.ArrowDropDown,
-                        contentDescription = "Dropdown",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { dropdownExpanded = true }
+                            .background(CardSurface)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = selectedFilter,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = TextPrimary
+                        )
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDropDown,
+                            contentDescription = "Dropdown",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false },
+                        modifier = Modifier.background(CardSurface)
+                    ) {
+                        listOf("All", "Today", "This Week", "This Month").forEach { filterOption ->
+                            DropdownMenuItem(
+                                text = { Text(filterOption, color = TextPrimary) },
+                                onClick = {
+                                    selectedFilter = filterOption
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        if (expenses.isEmpty()) {
+        if (displayExpenses.isEmpty()) {
             item {
                 Card(
                     shape = RoundedCornerShape(24.dp),
@@ -1196,7 +1251,11 @@ fun HomeTab(
                         .padding(vertical = 12.dp)
                 ) {
                     Text(
-                        text = "No transactions added yet. Click the central Floating Add Button to start tracking!",
+                        text = if (expenses.isEmpty()) {
+                            "No transactions added yet. Click the central Floating Add Button to start tracking!"
+                        } else {
+                            "No transactions match the selected filter."
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(24.dp),
@@ -1206,13 +1265,42 @@ fun HomeTab(
                 }
             }
         } else {
-            items(expenses.take(4)) { expense ->
+            items(displayExpenses) { expense ->
                 ExpenseItem(
                     expense = expense,
-                    onDelete = { viewModel.deleteExpense(expense.id) }
+                    onDelete = { expenseToDelete = expense }
                 )
             }
         }
+    }
+
+    if (expenseToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { expenseToDelete = null },
+            title = { Text("Delete Transaction", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete this transaction for '${expenseToDelete?.description}'?", color = TextPrimary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        expenseToDelete?.let {
+                            viewModel.deleteExpense(it.id)
+                        }
+                        expenseToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Delete", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { expenseToDelete = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = ThemeBackground,
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }
 
@@ -1222,6 +1310,31 @@ fun AnalyticsTab(
     expenses: List<Expense>,
     budgetLimit: Double
 ) {
+
+    var isWeekSelected by remember { mutableStateOf(true) }
+
+    val last4WeeksData = remember(expenses) {
+        val cal = Calendar.getInstance()
+        val result = mutableListOf<Pair<String, Double>>()
+        for (w in 3 downTo 0) {
+            val weekStart = Calendar.getInstance().apply {
+                timeInMillis = System.currentTimeMillis()
+                add(Calendar.DAY_OF_YEAR, -(w * 7 + 6))
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            val weekEnd = Calendar.getInstance().apply {
+                timeInMillis = System.currentTimeMillis()
+                add(Calendar.DAY_OF_YEAR, -(w * 7))
+                set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+            }
+            val label = "W${4 - w}"
+            val sum = expenses
+                .filter { it.date in weekStart.timeInMillis..weekEnd.timeInMillis }
+                .sumOf { it.amount }
+            result.add(label to sum)
+        }
+        result
+    }
 
     val totalSpent = remember(expenses) { expenses.sumOf { it.amount } }
 
@@ -1268,6 +1381,10 @@ fun AnalyticsTab(
             result.add(label to sum)
         }
         result
+    }
+
+    val chartData = remember(isWeekSelected, last7DaysData, last4WeeksData) {
+        if (isWeekSelected) last7DaysData else last4WeeksData
     }
 
 
@@ -1608,7 +1725,7 @@ fun AnalyticsTab(
                                 color = TextPrimary
                             )
                             Text(
-                                text = "Last 7 days spend activity",
+                                text = if (isWeekSelected) "Last 7 days spend activity" else "Last 4 weeks spend activity",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondary
                             )
@@ -1620,10 +1737,13 @@ fun AnalyticsTab(
                                 .background(CardSurface, RoundedCornerShape(12.dp))
                                 .padding(2.dp)
                         ) {
-                            listOf("Week" to true, "Month" to false).forEach { (label, active) ->
+                            listOf("Week" to true, "Month" to false).forEach { (label, isWeek) ->
+                                val active = (isWeekSelected == isWeek)
                                 Box(
                                     modifier = Modifier
-                                        .background(if (active) DarkCardSurface else Color.Transparent, RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (active) DarkCardSurface else Color.Transparent)
+                                        .clickable { isWeekSelected = isWeek }
                                         .padding(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Text(
@@ -1640,7 +1760,7 @@ fun AnalyticsTab(
 
 
                     SmoothLineChart(
-                        data = last7DaysData,
+                        data = chartData,
                         lineColor = TextPrimary,
                         gridColor = CardSurface,
                         dotColor = PrimaryAccent,
@@ -1652,7 +1772,7 @@ fun AnalyticsTab(
 
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        last7DaysData.forEach { (day, _) ->
+                        chartData.forEach { (day, _) ->
                             Text(
                                 text = day,
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -1666,8 +1786,8 @@ fun AnalyticsTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
 
-                    val highDay = last7DaysData.maxByOrNull { it.second }
-                    val lowDay = last7DaysData.filter { it.second > 0.0 }.minByOrNull { it.second }
+                    val highDay = chartData.maxByOrNull { it.second }
+                    val lowDay = chartData.filter { it.second > 0.0 }.minByOrNull { it.second }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2146,6 +2266,8 @@ fun HistoryTab(
     val context = LocalContext.current
     var showImportGuide by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
+    var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
+    var showExportFormatDialog by remember { mutableStateOf(false) }
 
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -2185,6 +2307,27 @@ fun HistoryTab(
                 try {
                     context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                         ExcelHelper.exportExpenses(outputStream, expenses)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Throwable) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Export failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
+    val pdfExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                        PdfHelper.exportExpenses(outputStream, expenses)
                         withContext(Dispatchers.Main) {
                             Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
                         }
@@ -2337,9 +2480,7 @@ fun HistoryTab(
                     if (expenses.isEmpty()) {
                         Toast.makeText(context, "No transactions to export", Toast.LENGTH_SHORT).show()
                     } else {
-                        onRequestStoragePermission {
-                            exportLauncher.launch("expenses_export.xls")
-                        }
+                        showExportFormatDialog = true
                     }
                 },
                 modifier = Modifier.weight(1f),
@@ -2677,11 +2818,88 @@ fun HistoryTab(
                 items(filteredExpenses) { expense ->
                     ExpenseItem(
                         expense = expense,
-                        onDelete = { onDeleteExpense(expense.id) }
+                        onDelete = { expenseToDelete = expense }
                     )
                 }
             }
         }
+    }
+
+    if (expenseToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { expenseToDelete = null },
+            title = { Text("Delete Transaction", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete this transaction for '${expenseToDelete?.description}'?", color = TextPrimary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        expenseToDelete?.let {
+                            onDeleteExpense(it.id)
+                        }
+                        expenseToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Delete", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { expenseToDelete = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = ThemeBackground,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    if (showExportFormatDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportFormatDialog = false },
+            title = { Text("Export Transactions", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Select your preferred format for exporting transaction logs:", color = TextSecondary)
+                    
+                    Button(
+                        onClick = {
+                            showExportFormatDialog = false
+                            onRequestStoragePermission {
+                                pdfExportLauncher.launch("expenses_export.pdf")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White)
+                    ) {
+                        Text("PDF Document (.pdf)", fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Button(
+                        onClick = {
+                            showExportFormatDialog = false
+                            onRequestStoragePermission {
+                                exportLauncher.launch("expenses_export.xls")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CardSurface, contentColor = TextPrimary)
+                    ) {
+                        Text("Excel Spreadsheet (.xls)", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportFormatDialog = false }) {
+                    Text("Cancel", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            containerColor = ThemeBackground,
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }
 
@@ -2697,7 +2915,9 @@ fun ExcelImportGuideDialog(
                 containerColor = ThemeBackground
             ),
             modifier = Modifier
-                .padding(16.dp)
+                .widthIn(max = 440.dp)
+                .fillMaxWidth()
+                .padding(8.dp)
                 .border(1.dp, CardSurface, RoundedCornerShape(24.dp))
         ) {
             Column(
@@ -2706,23 +2926,51 @@ fun ExcelImportGuideDialog(
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Header
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Description,
-                        contentDescription = null,
-                        tint = PrimaryAccent,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Text(
-                        text = "Excel Import Guide",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(PrimaryAccent.copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Description,
+                                contentDescription = null,
+                                tint = PrimaryAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Text(
+                            text = "Excel Import Guide",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
                         )
-                    )
+                    }
+                    
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(CardSurface, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Close",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
                 Text(
@@ -2731,105 +2979,152 @@ fun ExcelImportGuideDialog(
                     color = TextSecondary
                 )
 
-
+                // Table
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(CardSurface, RoundedCornerShape(12.dp))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .border(1.dp, CardSurface, RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(12.dp))
                 ) {
+                    val weights = listOf(1.0f, 0.85f, 1.45f, 0.7f)
 
+                    // Header Row
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(PrimaryAccent.copy(alpha = 0.08f))
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf("Date", "Category", "Description", "Amount").forEach { header ->
-                            Text(
-                                text = header,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .background(PrimaryAccent.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                                    .padding(vertical = 4.dp, horizontal = 2.dp),
-                                textAlign = TextAlign.Center,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = PrimaryAccent
-                            )
+                        val headers = listOf(
+                            "Date" to Icons.Rounded.DateRange,
+                            "Category" to Icons.Rounded.Category,
+                            "Description" to Icons.Rounded.Description,
+                            "Amount" to Icons.Rounded.Payments
+                        )
+                        headers.forEachIndexed { index, (text, icon) ->
+                            Row(
+                                modifier = Modifier.weight(weights[index]),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = PrimaryAccent,
+                                    modifier = Modifier.size(9.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = text,
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryAccent,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                     
+                    // Divider
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardSurface))
 
+                    // Row 1
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf("2026-06-22", "Food", "Lunch with team", "1250.0").forEach { valStr ->
+                        val rowData = listOf("2026-06-22", "Food", "Lunch\nwith team", "1250.0")
+                        rowData.forEachIndexed { index, valStr ->
                             Text(
                                 text = valStr,
-                                modifier = Modifier.weight(1f).padding(vertical = 2.dp),
+                                modifier = Modifier.weight(weights[index]),
                                 textAlign = TextAlign.Center,
                                 fontSize = 10.sp,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                lineHeight = 12.sp
                             )
                         }
                     }
-                    
 
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(TextSecondary.copy(alpha = 0.1f)))
+                    // Divider
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardSurface))
 
-
+                    // Row 2
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf("2026-06-21", "Bills", "Electricity Bill", "4500.0").forEach { valStr ->
+                        val rowData = listOf("2026-06-21", "Bills", "Electricity\nBill", "4500.0")
+                        rowData.forEachIndexed { index, valStr ->
                             Text(
                                 text = valStr,
-                                modifier = Modifier.weight(1f).padding(vertical = 2.dp),
+                                modifier = Modifier.weight(weights[index]),
                                 textAlign = TextAlign.Center,
                                 fontSize = 10.sp,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                lineHeight = 12.sp
                             )
                         }
                     }
                 }
 
-
+                // Guidelines List
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.padding(vertical = 4.dp)
                 ) {
-                    BulletPoint("Columns must include: Date, Category, Description, and Amount (headers are case-insensitive).")
-                    BulletPoint("Supported Date Formats: YYYY-MM-DD, YYYY-MM-DD HH:mm:ss, DD/MM/YYYY, or Excel date cell format.")
-                    BulletPoint("Amount must be a positive number greater than 0.")
-                    BulletPoint("Empty rows or rows with invalid values are skipped automatically.")
+                    BulletPoint("Columns must include:", "Date, Category, Description, and Amount (headers are case-insensitive).")
+                    BulletPoint("Supported Date Formats:", "YYYY-MM-DD, YYYY-MM-DD HH:mm:ss, DD/MM/YYYY, or Excel date cell format.")
+                    BulletPoint("Amount", "must be a positive number greater than 0.")
+                    BulletPoint("Empty rows", "or rows with invalid values are skipped automatically.")
                 }
 
+                // Footer Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    TextButton(
+                    OutlinedButton(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.textButtonColors(contentColor = TextSecondary)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, CardSurface),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                        contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        Text("Cancel", fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Cancel", fontWeight = FontWeight.Bold)
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    
                     Button(
                         onClick = {
                             onDismiss()
                             onChooseFile()
                         },
+                        modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryAccent,
                             contentColor = Color.White
-                        )
+                        ),
+                        contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        Icon(Icons.Rounded.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.UploadFile,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text("Upload File", fontWeight = FontWeight.Bold)
                     }
                 }
@@ -2839,22 +3134,29 @@ fun ExcelImportGuideDialog(
 }
 
 @Composable
-fun BulletPoint(text: String) {
+fun BulletPoint(boldPrefix: String, normalSuffix: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Text(
-            text = "•",
-            color = PrimaryAccent,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp
+        Icon(
+            imageVector = Icons.Rounded.CheckCircle,
+            contentDescription = null,
+            tint = PrimaryAccent,
+            modifier = Modifier.size(16.dp).padding(top = 2.dp)
         )
         Text(
-            text = text,
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = TextPrimary)) {
+                    append(boldPrefix)
+                }
+                append(" ")
+                withStyle(SpanStyle(color = TextSecondary)) {
+                    append(normalSuffix)
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
             lineHeight = 16.sp
         )
     }
@@ -2877,6 +3179,7 @@ fun ProfileTab(
     var inputBudget by remember { mutableStateOf(budgetLimit.toString()) }
     var showEditNameDialog by remember { mutableStateOf(false) }
     var editNameInput by remember(userName) { mutableStateOf(userName) }
+    var showResetConfirmDialog by remember { mutableStateOf(false) }
 
     if (showEditNameDialog) {
         AlertDialog(
@@ -3152,8 +3455,7 @@ fun ProfileTab(
                     
                     Button(
                         onClick = {
-                            viewModel.resetAllData()
-                            Toast.makeText(context, "All App Data Cleared", Toast.LENGTH_LONG).show()
+                            showResetConfirmDialog = true
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryAccent,
@@ -3336,6 +3638,34 @@ fun ProfileTab(
                 )
             }
         }
+    }
+
+    if (showResetConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirmDialog = false },
+            title = { Text("Wipe & Reset App Data", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete all transaction logs and reset the app? This action is permanent and cannot be undone.", color = TextPrimary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.resetAllData()
+                        Toast.makeText(context, "All App Data Cleared", Toast.LENGTH_LONG).show()
+                        showResetConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Reset", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirmDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = ThemeBackground,
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }
 

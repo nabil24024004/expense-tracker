@@ -24,7 +24,7 @@ import com.example.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseDialog(
-    initialCategory: String = "Food",
+    initialCategory: String = "",
     existingCategories: List<String> = listOf("Food", "Other"),
     onDismiss: () -> Unit,
     onConfirm: (amount: Double, description: String, category: String) -> Unit
@@ -154,7 +154,8 @@ fun AddExpenseDialog(
                         onClick = {
                             val amt = amount.toDoubleOrNull() ?: 0.0
                             if (amt > 0) {
-                                onConfirm(amt, description, category)
+                                val finalCategory = if (category.trim().isEmpty()) "Other" else category.trim()
+                                onConfirm(amt, description, finalCategory)
                             }
                         },
                         modifier = Modifier.testTag("save_expense_button"),
