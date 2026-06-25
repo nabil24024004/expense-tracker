@@ -203,6 +203,45 @@ object ExcelHelper {
         workbook.close()
     }
 
+    fun exportGroupExpenses(
+        outputStream: OutputStream,
+        group: com.example.group.data.entity.GroupEntity,
+        expenses: List<com.example.group.data.entity.GroupExpenseEntity>,
+        members: List<com.example.group.data.entity.MemberEntity>
+    ) {
+        val workbook = HSSFWorkbook()
+        val sheet = workbook.createSheet("Group Expenses")
+
+        val headerRow = sheet.createRow(0)
+        val headers = listOf("Date", "Title", "Category", "Amount", "Currency", "Notes")
+        for (i in headers.indices) {
+            val cell = headerRow.createCell(i)
+            cell.setCellValue(headers[i])
+        }
+
+        var rowIndex = 1
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        for (expense in expenses) {
+            val row = sheet.createRow(rowIndex++)
+            row.createCell(0).setCellValue(sdf.format(Date(expense.date)))
+            row.createCell(1).setCellValue(expense.title)
+            row.createCell(2).setCellValue(expense.category)
+            row.createCell(3).setCellValue(expense.amount)
+            row.createCell(4).setCellValue(expense.currency)
+            row.createCell(5).setCellValue(expense.notes ?: "")
+        }
+
+        sheet.setColumnWidth(0, 20 * 256)
+        sheet.setColumnWidth(1, 25 * 256)
+        sheet.setColumnWidth(2, 15 * 256)
+        sheet.setColumnWidth(3, 15 * 256)
+        sheet.setColumnWidth(4, 10 * 256)
+        sheet.setColumnWidth(5, 30 * 256)
+
+        workbook.write(outputStream)
+        workbook.close()
+    }
+
     private fun isRowEmpty(row: Row): Boolean {
         for (c in row.firstCellNum until row.lastCellNum) {
             val cell = row.getCell(c)

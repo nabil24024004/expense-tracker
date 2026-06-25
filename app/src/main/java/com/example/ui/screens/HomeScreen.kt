@@ -66,7 +66,6 @@ import androidx.fragment.app.FragmentActivity
 import com.example.MainViewModel
 import com.example.data.Expense
 import com.example.data.DebtDue
-import com.example.ui.screens.AddDebtDueDialog
 import com.example.ui.screens.DebtsSection
 import com.example.ui.components.GlassBox
 import com.example.ui.components.SimpleBarChart
@@ -136,15 +135,17 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
     val hasUnreadNotifications = remember(expenses, notificationsLastViewedTime) {
         notificationsLastViewedTime == 0L || expenses.any { it.date > notificationsLastViewedTime }
     }
+    val groupViewModel: com.example.group.viewmodel.GroupViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val selectedGroupId by groupViewModel.selectedGroupId.collectAsState()
     
     var currentTab by remember { mutableStateOf("home") }
-    var showAddDialog by remember { mutableStateOf(false) }
+    var homeMode by remember { mutableStateOf("personal") } // "personal" or "group"
+    var showAddEntryDialog by remember { mutableStateOf(false) }
     var addDialogPrefillCategory by remember { mutableStateOf("") }
     
     val debtsDues by viewModel.debtsDues.collectAsState()
     var activeHistorySection by remember { mutableStateOf("transactions") }
-    var showAddDebtDueDialog by remember { mutableStateOf(false) }
-    var showAddChoiceDialog by remember { mutableStateOf(false) }
+    var insightsSubTab by remember { mutableStateOf("ledger") }
     
 
     var showChatAssistant by remember { mutableStateOf(false) }
@@ -216,133 +217,119 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            if (showAddDialog) {
-                AddExpenseDialog(
+            if (showAddEntryDialog) {
+                AddEntryDialog(
                     initialCategory = addDialogPrefillCategory,
                     existingCategories = existingCategories,
-                    onDismiss = { showAddDialog = false },
-                    onConfirm = { amt, desc, cat ->
-                        viewModel.addExpense(amt, desc, cat)
-                        showAddDialog = false
-                    }
-                )
-            }
-
-            if (showAddDebtDueDialog) {
-                AddDebtDueDialog(
-                    onDismiss = { showAddDebtDueDialog = false },
-                    onConfirm = { name, amt, desc, type, dueDate ->
+                    onDismiss = { showAddEntryDialog = false },
+                    onExpenseConfirm = { amt, desc, cat, date, imgBytes, foodDetails ->
+                        viewModel.addExpense(amt, desc, cat, date, imgBytes, foodDetails)
+                        showAddEntryDialog = false
+                    },
+                    onDebtConfirm = { name, amt, desc, type, dueDate ->
                         viewModel.addDebtDue(name, amt, desc, type, dueDate)
-                        showAddDebtDueDialog = false
+                        showAddEntryDialog = false
                     }
                 )
             }
 
-            if (showAddChoiceDialog) {
-                Dialog(onDismissRequest = { showAddChoiceDialog = false }) {
-                    Card(
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = ThemeBackground),
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .border(1.dp, CardSurface, RoundedCornerShape(24.dp))
-                    ) {
+            when (currentTab) {
+                "home" -> {
+                    val selectedGroupId by groupViewModel.selectedGroupId.collectAsState()
+                    if (selectedGroupId != null) {
+                        com.example.group.ui.GroupsHomeScreen(
+                            viewModel = groupViewModel,
+                            showTopHeader = true
+                        )
+                    } else {
                         Column(
                             modifier = Modifier
-                                .padding(24.dp)
-                                .fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .fillMaxSize()
+                                .background(ThemeBackground)
                         ) {
-                            Text(
-                                text = "Log New Entry",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                ),
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start
-                            )
-                            Text(
-                                text = "Choose what type of record you want to add to your records.",
-                                color = TextSecondary,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Button(
-                                onClick = {
-                                    showAddChoiceDialog = false
-                                    showAddDialog = true
+                            HomeHeaderRow(
+                                userName = userName,
+                                profileImageBitmap = profileImageBitmap,
+                                hasUnreadNotifications = hasUnreadNotifications,
+                                onNavigate = { tab ->
+                                    if (tab.startsWith("history:")) {
+                                        activeHistorySection = tab.substringAfter("history:")
+                                        insightsSubTab = "ledger"
+                                        currentTab = "insights"
+                                    } else if (tab == "history") {
+                                        insightsSubTab = "ledger"
+                                        currentTab = "insights"
+                                    } else if (tab == "analytics") {
+                                        insightsSubTab = "analytics"
+                                        currentTab = "insights"
+                                    } else {
+                                        currentTab = tab
+                                    }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Log Transaction", fontWeight = FontWeight.Bold)
-                            }
+                                onShowNotifications = {
+                                    viewModel.markNotificationsAsRead()
+                                    showNotificationsDialog = true
+                                }
+                            )
 
-                            Button(
-                                onClick = {
-                                    showAddChoiceDialog = false
-                                    showAddDebtDueDialog = true
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Log Debt / Receivable", fontWeight = FontWeight.Bold)
-                            }
+                            HomeModeSwitcher(
+                                selectedMode = homeMode,
+                                onModeSelected = { homeMode = it }
+                            )
 
-                            TextButton(
-                                onClick = { showAddChoiceDialog = false },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Cancel", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (homeMode == "personal") {
+                                    HomeTab(
+                                        viewModel = viewModel,
+                                        userName = userName,
+                                        profileImageBitmap = profileImageBitmap,
+                                        totalAmount = totalAmount,
+                                        budgetLimit = budgetLimit,
+                                        expenses = expenses,
+                                        hasUnreadNotifications = hasUnreadNotifications,
+                                        onAddExpenseClick = { category ->
+                                            addDialogPrefillCategory = category
+                                            showAddEntryDialog = true
+                                        },
+                                        onNavigate = { tab ->
+                                            if (tab.startsWith("history:")) {
+                                                activeHistorySection = tab.substringAfter("history:")
+                                                insightsSubTab = "ledger"
+                                                currentTab = "insights"
+                                            } else if (tab == "history") {
+                                                insightsSubTab = "ledger"
+                                                currentTab = "insights"
+                                            } else if (tab == "analytics") {
+                                                insightsSubTab = "analytics"
+                                                currentTab = "insights"
+                                            } else {
+                                                currentTab = tab
+                                            }
+                                        },
+                                        onShowNotifications = {
+                                            viewModel.markNotificationsAsRead()
+                                            showNotificationsDialog = true
+                                        },
+                                        showWelcomeHeader = false
+                                    )
+                                } else {
+                                    com.example.group.ui.GroupsHomeScreen(
+                                        viewModel = groupViewModel,
+                                        showTopHeader = false,
+                                        showFloatingActionButton = false
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
-
-            when (currentTab) {
-                "home" -> HomeTab(
-                    viewModel = viewModel,
-                    userName = userName,
-                    profileImageBitmap = profileImageBitmap,
-                    totalAmount = totalAmount,
-                    budgetLimit = budgetLimit,
-                    expenses = expenses,
-                    hasUnreadNotifications = hasUnreadNotifications,
-                    onAddExpenseClick = { category ->
-                        addDialogPrefillCategory = category
-                        showAddDialog = true
-                    },
-                    onNavigate = { tab ->
-                        if (tab.startsWith("history:")) {
-                            activeHistorySection = tab.substringAfter("history:")
-                            currentTab = "history"
-                        } else {
-                            currentTab = tab
-                        }
-                    },
-                    onShowNotifications = {
-                        viewModel.markNotificationsAsRead()
-                        showNotificationsDialog = true
-                    }
-                )
-                "analytics" -> AnalyticsTab(
-                    expenses = expenses,
-                    debtsDues = debtsDues,
-                    budgetLimit = budgetLimit
-                )
-                "history" -> {
-                    HistoryTab(
+                "insights" -> {
+                    InsightsTab(
                         expenses = expenses,
                         debtsDues = debtsDues,
+                        budgetLimit = budgetLimit,
                         activeHistorySection = activeHistorySection,
                         onSectionChange = { activeHistorySection = it },
                         onDeleteExpense = { viewModel.deleteExpense(it) },
@@ -357,162 +344,197 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                         },
                         onDeleteDebtDue = { id ->
                             viewModel.deleteDebtDue(id)
-                        }
+                        },
+                        activeSubTab = insightsSubTab,
+                        onSubTabChange = { insightsSubTab = it }
                     )
                 }
-                "profile" -> ProfileTab(
-                    viewModel = viewModel,
-                    userName = userName,
-                    profileImageBitmap = profileImageBitmap,
-                    onUploadImageClick = {
-                        requestStoragePermission {
-                            imagePickerLauncher.launch("image/*")
-                        }
-                    },
-                    onUpdateName = { name -> viewModel.updateUserName(name) },
-                    budgetLimit = budgetLimit,
-                    biometricsEnabled = biometricsEnabled,
-                    themeSelection = themeSelection,
-                    activity = activity
-                )
+                "food_diary" -> {
+                    FoodDiaryTab(
+                        expenses = expenses,
+                        viewModel = viewModel
+                    )
+                }
+                "profile" -> {
+                    val isDarkMode by viewModel.isDarkMode.collectAsState()
+                    ProfileTab(
+                        viewModel = viewModel,
+                        userName = userName,
+                        profileImageBitmap = profileImageBitmap,
+                        onUploadImageClick = {
+                            requestStoragePermission {
+                                imagePickerLauncher.launch("image/*")
+                            }
+                        },
+                        onUpdateName = { name -> viewModel.updateUserName(name) },
+                        budgetLimit = budgetLimit,
+                        biometricsEnabled = biometricsEnabled,
+                        isDarkMode = isDarkMode,
+                        themeSelection = themeSelection,
+                        activity = activity
+                    )
+                }
             }
         }
 
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Color.Transparent)
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
-            contentAlignment = Alignment.Center
+        androidx.compose.animation.AnimatedVisibility(
+            visible = currentTab != "home" || selectedGroupId == null,
+            enter = androidx.compose.animation.slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+            ) + androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(300)),
+            exit = androidx.compose.animation.slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+            ) + androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(300)),
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Transparent)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
+                contentAlignment = Alignment.Center
             ) {
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(64.dp)
-                        .shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(32.dp),
-                            spotColor = Color.Black.copy(alpha = 0.15f)
-                        )
-                        .background(DarkCardSurface, RoundedCornerShape(32.dp))
-                        .padding(horizontal = 8.dp),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp)
+                            .shadow(
+                                elevation = 8.dp,
+                                shape = RoundedCornerShape(32.dp),
+                                spotColor = Color.Black.copy(alpha = 0.15f)
+                            )
+                            .background(DarkCardSurface, RoundedCornerShape(32.dp))
+                            .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        val tabs = listOf(
-                            Triple("home", Icons.Rounded.Home, "Home"),
-                            Triple("history", Icons.AutoMirrored.Rounded.List, "Logs"),
-                            Triple("analytics", Icons.Rounded.BarChart, "Stats"),
-                            Triple("profile", Icons.Rounded.Person, "Profile")
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val tabs = listOf(
+                                Triple("home", Icons.Rounded.Home, "Home"),
+                                Triple("insights", Icons.Rounded.BarChart, "Insights"),
+                                Triple("food_diary", Icons.Rounded.Fastfood, "Food Diary"),
+                                Triple("profile", Icons.Rounded.Person, "Profile")
+                            )
 
-                        tabs.forEach { (tabId, icon, label) ->
-                            val isSelected = currentTab == tabId
-                            
+                            tabs.forEach { (tabId, icon, label) ->
+                                val isSelected = currentTab == tabId
+                                
 
-                            val itemInteractionSource = remember { MutableInteractionSource() }
-                            val itemPressed by itemInteractionSource.collectIsPressedAsState()
-                            val itemScale by animateFloatAsState(if (itemPressed) 0.92f else 1f, label = "tabItemScale")
+                                val itemInteractionSource = remember { MutableInteractionSource() }
+                                val itemPressed by itemInteractionSource.collectIsPressedAsState()
+                                val itemScale by animateFloatAsState(if (itemPressed) 0.92f else 1f, label = "tabItemScale")
 
-                            Box(
-                                modifier = Modifier
-                                    .graphicsLayer {
-                                        scaleX = itemScale
-                                        scaleY = itemScale
-                                    }
-                                    .clip(RoundedCornerShape(24.dp))
-                                    .background(
-                                        if (isSelected) ThemeBackground else Color.Transparent
-                                    )
-                                    .clickable(
-                                        interactionSource = itemInteractionSource,
-                                        indication = LocalIndication.current
-                                    ) { currentTab = tabId }
-                                    .padding(horizontal = if (isSelected) 14.dp else 12.dp, vertical = 8.dp)
-                                    .animateContentSize(
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioLowBouncy,
-                                            stiffness = Spring.StiffnessMedium
+                                Box(
+                                    modifier = Modifier
+                                        .graphicsLayer {
+                                            scaleX = itemScale
+                                            scaleY = itemScale
+                                        }
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(
+                                            if (isSelected) PrimaryAccent else Color.Transparent
                                         )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        .clickable(
+                                            interactionSource = itemInteractionSource,
+                                            indication = LocalIndication.current
+                                        ) { currentTab = tabId }
+                                        .padding(horizontal = if (isSelected) 10.dp else 8.dp, vertical = 8.dp)
+                                        .animateContentSize(
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                                stiffness = Spring.StiffnessMedium
+                                            )
+                                        ),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = label,
-                                        tint = if (isSelected) DarkCardSurface else TextSecondary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    if (isSelected) {
-                                        Text(
-                                            text = label,
-                                            color = DarkCardSurface,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
-                                            maxLines = 1
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = label,
+                                            tint = if (isSelected) DarkCardTextPrimary else Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(20.dp)
                                         )
+                                        if (isSelected) {
+                                            Text(
+                                                text = label,
+                                                color = DarkCardTextPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                maxLines = 1
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
 
-                Box(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = fabScale
-                            scaleY = fabScale
-                        }
-                        .size(56.dp)
-                        .shadow(
-                            elevation = 8.dp,
-                            shape = CircleShape,
-                            spotColor = Color.Black.copy(alpha = 0.2f)
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer {
+                                scaleX = fabScale
+                                scaleY = fabScale
+                            }
+                            .size(56.dp)
+                            .shadow(
+                                elevation = 8.dp,
+                                shape = CircleShape,
+                                spotColor = Color.Black.copy(alpha = 0.2f)
+                            )
+                            .background(PrimaryAccent, CircleShape)
+                            .clickable(
+                                interactionSource = fabInteractionSource,
+                                indication = LocalIndication.current
+                            ) {
+                                if (currentTab == "home" && homeMode == "group") {
+                                    if (selectedGroupId == null) {
+                                        groupViewModel.setShowCreateGroupDialog(true)
+                                    } else {
+                                        groupViewModel.setShowAddExpenseDialog(true)
+                                    }
+                                } else {
+                                    addDialogPrefillCategory = ""
+                                    showAddEntryDialog = true
+                                }
+                            }
+                            .border(1.dp, PrimaryAccent, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Add Transaction",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
-                        .background(PrimaryAccent, CircleShape)
-                        .clickable(
-                            interactionSource = fabInteractionSource,
-                            indication = LocalIndication.current
-                        ) {
-                            addDialogPrefillCategory = ""
-                            showAddChoiceDialog = true
-                        }
-                        .border(1.dp, PrimaryAccent, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "Add Transaction",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    }
                 }
             }
         }
 
 
         if (showNotificationsDialog) {
+            val primaryAccentVal = PrimaryAccent
+            val textPrimaryVal = TextPrimary
+            val textSecondaryVal = TextSecondary
             Dialog(onDismissRequest = { showNotificationsDialog = false }) {
-                val notificationSections = remember(expenses, budgetLimit, totalAmount) {
+                val notificationSections = remember(expenses, budgetLimit, totalAmount, primaryAccentVal, textPrimaryVal, textSecondaryVal) {
                     val sections = mutableListOf<Pair<String, List<NotificationItem>>>()
 
 
@@ -524,7 +546,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Budget Exceeded",
                             text = "You've overspent by ৳${String.format(Locale.US, "%,.0f", totalAmount - budgetLimit)}. Review your recent expenses.",
                             icon = Icons.Rounded.Error,
-                            color = PrimaryAccent,
+                            color = primaryAccentVal,
                             severity = 2
                         ))
                     } else if (percentUsed >= 80) {
@@ -532,7 +554,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "High Spending Alert",
                             text = "$percentUsed% of budget used (৳${String.format(Locale.US, "%,.0f", budgetLimit - totalAmount)} remaining).",
                             icon = Icons.Rounded.Warning,
-                            color = PrimaryAccent,
+                            color = primaryAccentVal,
                             severity = 1
                         ))
                     } else if (expenses.isNotEmpty()) {
@@ -540,7 +562,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Budget On Track",
                             text = "$percentUsed% used — ৳${String.format(Locale.US, "%,.0f", budgetLimit - totalAmount)} remaining this month.",
                             icon = Icons.Rounded.CheckCircle,
-                            color = TextPrimary,
+                            color = textPrimaryVal,
                             severity = 0
                         ))
                     }
@@ -559,7 +581,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Top Category: ${it.key}",
                                 text = "৳${String.format(Locale.US, "%,.0f", topAmt)} spent ($topPct% of total). ${if (topPct > 50) "Consider diversifying your spending." else ""}",
                                 icon = Icons.Rounded.BarChart,
-                                color = PrimaryAccent,
+                                color = primaryAccentVal,
                                 severity = if (topPct > 50) 1 else 0
                             ))
                         }
@@ -570,7 +592,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Avg. Transaction: ৳${String.format(Locale.US, "%,.0f", avgPerTxn)}",
                             text = "Across ${expenses.size} total transactions.",
                             icon = Icons.Rounded.Calculate,
-                            color = TextPrimary,
+                            color = textPrimaryVal,
                             severity = 0
                         ))
 
@@ -580,7 +602,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "$catCount Active ${if (catCount == 1) "Category" else "Categories"}",
                             text = categoryGroups.keys.joinToString(", "),
                             icon = Icons.Rounded.Category,
-                            color = TextSecondary,
+                            color = textSecondaryVal,
                             severity = 0
                         ))
                     }
@@ -602,7 +624,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Today's Spending: ৳${String.format(Locale.US, "%,.0f", todayTotal)}",
                                 text = "${todayExpenses.size} transaction${if (todayExpenses.size > 1) "s" else ""} logged today.",
                                 icon = Icons.Rounded.Today,
-                                color = TextPrimary,
+                                color = textPrimaryVal,
                                 severity = 0
                             ))
                         } else {
@@ -610,7 +632,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "No Spending Today",
                                 text = "Great discipline! Keep it going.",
                                 icon = Icons.Rounded.Savings,
-                                color = TextSecondary,
+                                color = textSecondaryVal,
                                 severity = 0
                             ))
                         }
@@ -633,7 +655,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Savings Forecast: +৳${String.format(Locale.US, "%,.0f", predictedSavings)}",
                                 text = "At current pace, you'll save ৳${String.format(Locale.US, "%,.0f", predictedSavings)} this month.",
                                 icon = Icons.Rounded.TrendingDown,
-                                color = TextPrimary,
+                                color = textPrimaryVal,
                                 severity = 0
                             ))
                         } else {
@@ -641,7 +663,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Over-Budget Warning",
                                 text = "Projected to exceed budget by ৳${String.format(Locale.US, "%,.0f", -predictedSavings)}. Reduce daily spending.",
                                 icon = Icons.Rounded.TrendingUp,
-                                color = PrimaryAccent,
+                                color = primaryAccentVal,
                                 severity = 2
                             ))
                         }
@@ -658,7 +680,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Last Transaction",
                             text = "৳${String.format(Locale.US, "%,.0f", latest.amount)} — ${latest.description.ifEmpty { latest.category }} (${sdf.format(Date(latest.date))})",
                             icon = Icons.Rounded.Receipt,
-                            color = TextSecondary,
+                            color = textSecondaryVal,
                             severity = 0
                         ))
 
@@ -669,18 +691,10 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Biggest Expense: ৳${String.format(Locale.US, "%,.0f", it.amount)}",
                                 text = "${it.description.ifEmpty { it.category }} in ${it.category}.",
                                 icon = Icons.Rounded.Lightbulb,
-                                color = TextPrimary,
+                                color = textPrimaryVal,
                                 severity = 0
                             ))
                         }
-                    } else {
-                        insights.add(NotificationItem(
-                            title = "Get Started",
-                            text = "Tap the bolt button to log your first expense and unlock insights!",
-                            icon = Icons.Rounded.Lightbulb,
-                            color = TextSecondary,
-                            severity = 0
-                        ))
                     }
                     if (insights.isNotEmpty()) sections.add("Quick Insights" to insights)
 
@@ -790,7 +804,8 @@ fun HomeTab(
     hasUnreadNotifications: Boolean,
     onAddExpenseClick: (category: String) -> Unit,
     onNavigate: (tab: String) -> Unit,
-    onShowNotifications: () -> Unit
+    onShowNotifications: () -> Unit,
+    showWelcomeHeader: Boolean = true
 ) {
     val context = LocalContext.current
     val debtsDues by viewModel.debtsDues.collectAsState()
@@ -883,124 +898,127 @@ fun HomeTab(
             .padding(horizontal = 20.dp),
         contentPadding = PaddingValues(bottom = bottomPadding, top = 24.dp)
     ) {
-        item {
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(horizontalAlignment = Alignment.Start) {
-                    Text(
-                        text = "WELCOME BACK",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp,
-                            fontSize = 9.sp
-                        ),
-                        color = TextSecondary
-                    )
-                    Text(
-                        text = userName,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Black,
-                            color = TextPrimary,
-                            letterSpacing = (-0.5).sp
-                        )
-                    )
-                }
-
+        if (showWelcomeHeader) {
+            item {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(CardSurface)
-                            .clickable { onNavigate("profile") },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (profileImageBitmap != null) {
-                            Image(
-                                bitmap = profileImageBitmap.asImageBitmap(),
-                                contentDescription = "Settings Profile",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(
+                            text = "WELCOME BACK",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp,
+                                fontSize = 9.sp
+                            ),
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = userName,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Black,
+                                color = TextPrimary,
+                                letterSpacing = (-0.5).sp
                             )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Settings,
-                                contentDescription = "Settings",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        )
                     }
 
-
-                    Box(
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+
                         Box(
                             modifier = Modifier
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .background(CardSurface)
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = LocalIndication.current
-                                ) { onShowNotifications() },
+                                .clickable { onNavigate("profile") },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Notifications,
-                                contentDescription = "Notifications",
-                                tint = if (hasUnreadNotifications) PrimaryAccent else TextPrimary,
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .graphicsLayer { rotationZ = bellRotation }
-                            )
+                            if (profileImageBitmap != null) {
+                                Image(
+                                    bitmap = profileImageBitmap.asImageBitmap(),
+                                    contentDescription = "Settings Profile",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Settings,
+                                    contentDescription = "Settings",
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
 
 
-                        if (hasUnreadNotifications) {
-
+                        Box(
+                            contentAlignment = Alignment.Center
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = (-1).dp, y = 1.dp)
-                                    .size(10.dp)
                                     .graphicsLayer {
-                                        scaleX = pulseScale
-                                        scaleY = pulseScale
-                                        alpha = pulseAlpha
+                                        scaleX = scale
+                                        scaleY = scale
                                     }
-                                    .background(PrimaryAccent, CircleShape)
-                            )
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(CardSurface)
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = LocalIndication.current
+                                    ) { onShowNotifications() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Notifications,
+                                    contentDescription = "Notifications",
+                                    tint = if (hasUnreadNotifications) PrimaryAccent else TextPrimary,
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .graphicsLayer { rotationZ = bellRotation }
+                                )
+                            }
 
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = (-1).dp, y = 1.dp)
-                                    .size(10.dp)
-                                    .border(1.5.dp, ThemeBackground, CircleShape)
-                                    .background(PrimaryAccent, CircleShape)
-                            )
+
+                            if (hasUnreadNotifications) {
+
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = (-1).dp, y = 1.dp)
+                                        .size(10.dp)
+                                        .graphicsLayer {
+                                            scaleX = pulseScale
+                                            scaleY = pulseScale
+                                            alpha = pulseAlpha
+                                        }
+                                        .background(PrimaryAccent, CircleShape)
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = (-1).dp, y = 1.dp)
+                                        .size(10.dp)
+                                        .border(1.5.dp, ThemeBackground, CircleShape)
+                                        .background(PrimaryAccent, CircleShape)
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
 
 
+        item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1335,21 +1353,19 @@ fun HomeTab(
                     )
                 }
 
-                val hubCategories = remember(expenses) {
-                    (listOf("Food", "Other") + expenses.map { it.category }).distinct()
-                }
+                val hubCategories = listOf("Transport", "Mobile", "Others")
 
-                LazyRow(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(hubCategories) { catName ->
+                    hubCategories.forEach { catName ->
                         val style = getCategoryStyle(catName)
                         Card(
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(containerColor = CardSurface),
                             modifier = Modifier
-                                .width(96.dp)
+                                .weight(1f)
                                 .clickable { onAddExpenseClick(catName) }
                         ) {
                             Column(
@@ -1357,7 +1373,7 @@ fun HomeTab(
                                     .fillMaxWidth()
                                     .padding(vertical = 14.dp, horizontal = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
-                              ) {
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .size(46.dp)
@@ -1378,7 +1394,7 @@ fun HomeTab(
                                 Text(
                                     text = catName,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     color = TextPrimary,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
@@ -3250,21 +3266,33 @@ fun HistoryTab(
             .fillMaxSize()
             .padding(horizontal = 20.dp)
     ) {
-        Text(
-            text = "Ledger & Logs",
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-0.5).sp
-            ),
-            color = TextPrimary,
-            modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
-        )
-        Text(
-            text = "Review your transactions, debts, and receivables.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Ledger & Logs",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.5).sp
+                ),
+                color = TextPrimary
+            )
+            
+            IconButton(
+                onClick = { showExportFormatDialog = true }
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ImportExport,
+                    contentDescription = "Export/Import Options",
+                    tint = PrimaryAccent,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
 
         // Sub-Navigation Tabs
         Row(
@@ -3304,78 +3332,6 @@ fun HistoryTab(
         }
 
         if (activeSection == "transactions") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-
-                Button(
-                    onClick = { showImportGuide = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryAccent,
-                        contentColor = Color.White
-                    ),
-                    contentPadding = PaddingValues(vertical = 10.dp)
-                ) {
-                    if (isImporting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.UploadFile,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import Logs", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
-                    }
-                }
-
-
-                Button(
-                    onClick = {
-                        if (expenses.isEmpty()) {
-                            Toast.makeText(context, "No transactions to export", Toast.LENGTH_SHORT).show()
-                        } else {
-                            showExportFormatDialog = true
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = CardSurface,
-                        contentColor = TextPrimary
-                    ),
-                    contentPadding = PaddingValues(vertical = 10.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = PrimaryAccent
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export Logs", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
-                    }
-                }
-            }
-
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -3741,11 +3697,12 @@ fun HistoryTab(
     if (showExportFormatDialog) {
         AlertDialog(
             onDismissRequest = { showExportFormatDialog = false },
-            title = { Text("Export Records", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text("Export & Import", color = TextPrimary, fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Select your preferred format for exporting your transactions and ledger:", color = TextSecondary)
-                    
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
                     Button(
                         onClick = {
                             showExportFormatDialog = false
@@ -3757,7 +3714,7 @@ fun HistoryTab(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White)
                     ) {
-                        Text("PDF Document (.pdf)", fontWeight = FontWeight.Bold)
+                        Text("Export PDF Document (.pdf)", fontWeight = FontWeight.Bold)
                     }
                     
                     Button(
@@ -3771,7 +3728,26 @@ fun HistoryTab(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CardSurface, contentColor = TextPrimary)
                     ) {
-                        Text("Excel Spreadsheet (.xls)", fontWeight = FontWeight.Bold)
+                        Text("Export Excel Spreadsheet (.xls)", fontWeight = FontWeight.Bold)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(CardSurface)
+                    )
+
+                    Button(
+                        onClick = {
+                            showExportFormatDialog = false
+                            showImportGuide = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CardSurface, contentColor = TextPrimary)
+                    ) {
+                        Text("Import Logs from Excel", fontWeight = FontWeight.Bold)
                     }
                 }
             },
@@ -4056,6 +4032,7 @@ fun ProfileTab(
     onUpdateName: (String) -> Unit,
     budgetLimit: Double,
     biometricsEnabled: Boolean,
+    isDarkMode: Boolean,
     themeSelection: String,
     activity: FragmentActivity
 ) {
@@ -4323,6 +4300,211 @@ fun ProfileTab(
             }
         }
 
+        // Dark Mode Toggle
+        item {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "Appearance",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.DarkMode, "Dark Mode", tint = PrimaryAccent, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Dark Mode",
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = if (isDarkMode) "Dark theme is active" else "Light theme is active",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isDarkMode,
+                            onCheckedChange = { viewModel.updateDarkMode(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = PrimaryAccent,
+                                uncheckedThumbColor = TextSecondary,
+                                uncheckedTrackColor = ThemeBackground,
+                                uncheckedBorderColor = CardSurface
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider(color = ThemeBackground)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Theme",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Row 1: Classic & Ocean Blue
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            val isClassicSelected = themeSelection == "Classic"
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isClassicSelected) PrimaryAccent.copy(alpha = 0.1f) else ThemeBackground
+                                ),
+                                border = if (isClassicSelected) BorderStroke(2.dp, PrimaryAccent) else BorderStroke(1.dp, CardSurface),
+                                modifier = Modifier.weight(1f).clickable { viewModel.updateTheme("Classic") }
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFB51A28), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF161E2F), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFFFF5F2), CircleShape).border(1.dp, Color(0xFFFFE0D5), CircleShape))
+                                    }
+                                    Text(text = "Classic", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (isClassicSelected) PrimaryAccent else TextPrimary)
+                                    Text(text = "Red accent", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+
+                            val isBlueSelected = themeSelection == "Ocean Blue" || themeSelection == "Blue/Black"
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isBlueSelected) Color(0xFF5483B3).copy(alpha = 0.1f) else ThemeBackground
+                                ),
+                                border = if (isBlueSelected) BorderStroke(2.dp, Color(0xFF5483B3)) else BorderStroke(1.dp, CardSurface),
+                                modifier = Modifier.weight(1f).clickable { viewModel.updateTheme("Ocean Blue") }
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF5483B3), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF021024), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFC1E8FF), CircleShape).border(1.dp, Color(0xFFE6F4FE), CircleShape))
+                                    }
+                                    Text(text = "Ocean Blue", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (isBlueSelected) Color(0xFF5483B3) else TextPrimary)
+                                    Text(text = "Deep blue accent", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+                        }
+
+                        // Row 2: Green Tea & Sunset
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            val isGreenSelected = themeSelection == "Green Tea" || themeSelection == "Green" || themeSelection == "Light Green"
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isGreenSelected) Color(0xFF688E4E).copy(alpha = 0.1f) else ThemeBackground
+                                ),
+                                border = if (isGreenSelected) BorderStroke(2.dp, Color(0xFF688E4E)) else BorderStroke(1.dp, CardSurface),
+                                modifier = Modifier.weight(1f).clickable { viewModel.updateTheme("Green Tea") }
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF688E4E), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF1B2727), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFF4F7F4), CircleShape).border(1.dp, Color(0xFFD5DDDF), CircleShape))
+                                    }
+                                    Text(text = "Green Tea", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (isGreenSelected) Color(0xFF688E4E) else TextPrimary)
+                                    Text(text = "Nature green accent", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+
+                            val isSunsetSelected = themeSelection == "Sunset" || themeSelection == "Light Yellow"
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSunsetSelected) Color(0xFFA74D65).copy(alpha = 0.1f) else ThemeBackground
+                                ),
+                                border = if (isSunsetSelected) BorderStroke(2.dp, Color(0xFFA74D65)) else BorderStroke(1.dp, CardSurface),
+                                modifier = Modifier.weight(1f).clickable { viewModel.updateTheme("Sunset") }
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFDF7862), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF1D1A39), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFFDB45C), CircleShape).border(1.dp, Color(0xFFFFE0CC), CircleShape))
+                                    }
+                                    Text(text = "Sunset", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (isSunsetSelected) Color(0xFFA74D65) else TextPrimary)
+                                    Text(text = "Warm sunset accent", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+                        }
+
+                        // Row 3: Grapefruit & Bubblegum
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            val isGrapefruitSelected = themeSelection == "Grapefruit" || themeSelection == "Purple" || themeSelection == "Light Blue"
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isGrapefruitSelected) Color(0xFFA56ABD).copy(alpha = 0.1f) else ThemeBackground
+                                ),
+                                border = if (isGrapefruitSelected) BorderStroke(2.dp, Color(0xFFA56ABD)) else BorderStroke(1.dp, CardSurface),
+                                modifier = Modifier.weight(1f).clickable { viewModel.updateTheme("Grapefruit") }
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFA56ABD), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF49225B), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFFDFBFE), CircleShape).border(1.dp, Color(0xFFE7DBEF), CircleShape))
+                                    }
+                                    Text(text = "Grapefruit", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (isGrapefruitSelected) Color(0xFFA56ABD) else TextPrimary)
+                                    Text(text = "Purple accent", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+
+                            val isBubblegumSelected = themeSelection == "Bubblegum" || themeSelection == "Pink"
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isBubblegumSelected) Color(0xFFBA96C1).copy(alpha = 0.1f) else ThemeBackground
+                                ),
+                                border = if (isBubblegumSelected) BorderStroke(2.dp, Color(0xFFBA96C1)) else BorderStroke(1.dp, CardSurface),
+                                modifier = Modifier.weight(1f).clickable { viewModel.updateTheme("Bubblegum") }
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFBA96C1), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFF4B3F6E), CircleShape))
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFF7F5F8), CircleShape).border(1.dp, Color(0xFFDCD7D5), CircleShape))
+                                    }
+                                    Text(text = "Bubblegum", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (isBubblegumSelected) Color(0xFFBA96C1) else TextPrimary)
+                                    Text(text = "Pink accent", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             Card(
                 shape = RoundedCornerShape(24.dp),
@@ -4558,7 +4740,7 @@ fun ProfileTab(
 fun ExpenseItem(expense: Expense, onDelete: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy, h:mm a", Locale.US) }
     val dateStr = remember(expense.date) { dateFormat.format(Date(expense.date)) }
-    val style = remember(expense.category) { getCategoryStyle(expense.category) }
+    val style = getCategoryStyle(expense.category)
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -4689,18 +4871,21 @@ fun DeveloperActionButton(
 }
 
 
+@Composable
 fun getCategoryStyle(category: String): Triple<androidx.compose.ui.graphics.vector.ImageVector, Color, Color> {
     val cleanCategory = category.lowercase(Locale.US).trim()
     val icon = when (cleanCategory) {
         "food" -> Icons.Rounded.Restaurant
         "shopping" -> Icons.Rounded.ShoppingBag
         "bills" -> Icons.Rounded.ReceiptLong
-        "other" -> Icons.Rounded.AddCircleOutline
+        "other", "others" -> Icons.Rounded.AddCircleOutline
         "travel", "transport", "car" -> Icons.Rounded.DirectionsCar
+        "mobile", "phone", "telecom" -> Icons.Rounded.PhoneAndroid
         "entertainment", "games", "movies" -> Icons.Rounded.SportsEsports
         "medical", "health", "doctor" -> Icons.Rounded.MedicalServices
         "education", "school", "books" -> Icons.Rounded.School
         "salary", "income" -> Icons.Rounded.Payments
+        "debt repayment" -> Icons.Rounded.Handshake
         else -> {
             val hashCode = category.hashCode()
             val icons = listOf(
@@ -4772,6 +4957,882 @@ private fun NotificationCard(item: NotificationItem) {
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     lineHeight = 16.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun InsightsTab(
+    expenses: List<Expense>,
+    debtsDues: List<DebtDue>,
+    budgetLimit: Double,
+    activeHistorySection: String,
+    onSectionChange: (String) -> Unit,
+    onDeleteExpense: (Int) -> Unit,
+    onImportExpenses: (List<Expense>, (Boolean, Int) -> Unit) -> Unit,
+    onRequestStoragePermission: (() -> Unit) -> Unit,
+    onSettleDebtDue: (DebtDue, Boolean) -> Unit,
+    onDeleteDebtDue: (Int) -> Unit,
+    activeSubTab: String,
+    onSubTabChange: (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .height(48.dp)
+                .background(CardSurface, RoundedCornerShape(16.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val subTabs = listOf("ledger" to "Ledger", "analytics" to "Analytics")
+            subTabs.forEach { (subTabKey, subTabLabel) ->
+                val isSelected = activeSubTab == subTabKey
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isSelected) PrimaryAccent else Color.Transparent
+                        )
+                        .clickable { onSubTabChange(subTabKey) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = subTabLabel,
+                        color = if (isSelected) Color.White else TextSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+        
+        Box(modifier = Modifier.weight(1f)) {
+            if (activeSubTab == "ledger") {
+                HistoryTab(
+                    expenses = expenses,
+                    debtsDues = debtsDues,
+                    activeHistorySection = activeHistorySection,
+                    onSectionChange = onSectionChange,
+                    onDeleteExpense = onDeleteExpense,
+                    onImportExpenses = onImportExpenses,
+                    onRequestStoragePermission = onRequestStoragePermission,
+                    onSettleDebtDue = onSettleDebtDue,
+                    onDeleteDebtDue = onDeleteDebtDue
+                )
+            } else {
+                AnalyticsTab(
+                    expenses = expenses,
+                    debtsDues = debtsDues,
+                    budgetLimit = budgetLimit
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FoodDiaryTab(
+    expenses: List<Expense>,
+    viewModel: MainViewModel
+) {
+    val context = LocalContext.current
+    
+    val currentMonthFoodEntries = remember(expenses) {
+        val cal = Calendar.getInstance()
+        val currentYear = cal.get(Calendar.YEAR)
+        val currentMonth = cal.get(Calendar.MONTH)
+        
+        expenses.filter { exp ->
+            if (exp.category.trim().lowercase(Locale.US) == "food") {
+                val entryCal = Calendar.getInstance()
+                entryCal.timeInMillis = exp.date
+                entryCal.get(Calendar.YEAR) == currentYear && entryCal.get(Calendar.MONTH) == currentMonth
+            } else {
+                false
+            }
+        }.sortedByDescending { it.date }
+    }
+
+    val monthName = remember {
+        SimpleDateFormat("MMMM yyyy", Locale.US).format(Date())
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp)
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Food Diary",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Black
+                    ),
+                    color = TextPrimary
+                )
+                Text(
+                    text = "Your culinary log for $monthName",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            }
+            
+            if (currentMonthFoodEntries.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = { exportFoodDiaryToPdf(context, currentMonthFoodEntries) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = PrimaryAccent.copy(alpha = 0.12f),
+                        contentColor = PrimaryAccent
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PictureAsPdf,
+                        contentDescription = "Export PDF",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Export", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        if (currentMonthFoodEntries.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(CardSurface, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Fastfood,
+                            contentDescription = null,
+                            tint = PrimaryAccent,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Your Food Diary is Empty",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Log transactions with category 'Food' and add photo details in the Add transaction menu to build your diary!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
+                items(currentMonthFoodEntries) { item ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val bitmap = remember(item.imageBytes) {
+                                if (item.imageBytes != null) {
+                                    try {
+                                        BitmapFactory.decodeByteArray(item.imageBytes, 0, item.imageBytes.size)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                } else {
+                                    null
+                                }
+                            }
+                            
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Food Pic",
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .border(1.dp, CardSurface, RoundedCornerShape(12.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .background(ThemeBackground, RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Fastfood,
+                                        contentDescription = null,
+                                        tint = TextSecondary.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.width(16.dp))
+                            
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.foodDetails ?: "Delicious Meal 🍲",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = item.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val dateFormatted = remember(item.date) {
+                                    SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.US).format(Date(item.date))
+                                }
+                                Text(
+                                    text = dateFormatted,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary.copy(alpha = 0.8f)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(8.dp))
+                            
+                            Text(
+                                text = String.format(Locale.US, "৳%,.2f", item.amount),
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Black
+                                ),
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun exportFoodDiaryToPdf(context: Context, entries: List<Expense>) {
+    val pdfDocument = android.graphics.pdf.PdfDocument()
+    val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, 1).create()
+    
+    var pageNumber = 1
+    var page = pdfDocument.startPage(pageInfo)
+    var canvas = page.canvas
+    
+    val paint = android.graphics.Paint().apply {
+        isAntiAlias = true
+    }
+    
+    // Helper function for hand-drawn look hearts
+    fun drawDoodleHeart(canvas: android.graphics.Canvas, x: Float, y: Float, size: Float, colorStr: String) {
+        val heartPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor(colorStr)
+            style = android.graphics.Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val path = android.graphics.Path()
+        path.moveTo(x, y + size * 0.25f)
+        path.cubicTo(x - size * 0.5f, y - size * 0.5f, x - size, y + size * 0.3f, x, y + size)
+        path.cubicTo(x + size, y + size * 0.3f, x + size * 0.5f, y - size * 0.5f, x, y + size * 0.25f)
+        path.close()
+        canvas.drawPath(path, heartPaint)
+    }
+
+    // Helper function for hand-drawn star sparkles
+    fun drawDoodleSparkle(canvas: android.graphics.Canvas, x: Float, y: Float, size: Float, colorStr: String) {
+        val sparklePaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor(colorStr)
+            style = android.graphics.Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val path = android.graphics.Path()
+        path.moveTo(x, y - size)
+        path.quadTo(x, y, x + size, y)
+        path.quadTo(x, y, x, y + size)
+        path.quadTo(x, y, x - size, y)
+        path.quadTo(x, y, x, y - size)
+        path.close()
+        canvas.drawPath(path, sparklePaint)
+    }
+
+    // Helper function to draw washi tape at a slight angle
+    fun drawWashiTape(canvas: android.graphics.Canvas, cx: Float, cy: Float, width: Float, height: Float, colorStr: String, angle: Float) {
+        val tapePaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor(colorStr)
+            isAntiAlias = true
+        }
+        canvas.save()
+        canvas.rotate(angle, cx, cy)
+        canvas.drawRect(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2, tapePaint)
+        
+        // Draw jagged edges at the ends of washi tape
+        val edgePaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#FAF3E8") // same as page background to cut out
+            style = android.graphics.Paint.Style.FILL
+            isAntiAlias = true
+        }
+        
+        // Left edge jagged cuts
+        val leftX = cx - width / 2
+        var curY = cy - height / 2
+        while (curY < cy + height / 2) {
+            val path = android.graphics.Path()
+            path.moveTo(leftX, curY)
+            path.lineTo(leftX + 3f, curY + 2f)
+            path.lineTo(leftX, curY + 4f)
+            path.close()
+            canvas.drawPath(path, edgePaint)
+            curY += 4f
+        }
+        
+        // Right edge jagged cuts
+        val rightX = cx + width / 2
+        curY = cy - height / 2
+        while (curY < cy + height / 2) {
+            val path = android.graphics.Path()
+            path.moveTo(rightX, curY)
+            path.lineTo(rightX - 3f, curY + 2f)
+            path.lineTo(rightX, curY + 4f)
+            path.close()
+            canvas.drawPath(path, edgePaint)
+            curY += 4f
+        }
+        
+        canvas.restore()
+    }
+    
+    // Draw page backgrounds and borders
+    fun initPage(canvas: android.graphics.Canvas, isFirst: Boolean, pNum: Int) {
+        canvas.drawColor(android.graphics.Color.parseColor("#FAF3E8")) // Warm cream scrapbook base
+        
+        // Draw simple hand-drawn sketch border around page
+        val borderPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#E0D2C0")
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 2f
+            isAntiAlias = true
+        }
+        canvas.drawRect(15f, 15f, 580f, 827f, borderPaint)
+        
+        val innerBorderPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#EADCC9")
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 1f
+            isAntiAlias = true
+        }
+        canvas.drawRect(20f, 20f, 575f, 822f, innerBorderPaint)
+        
+        if (isFirst) {
+            // Main title "My Food Diary" in elegant bold italic serif
+            val titlePaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.parseColor("#4A3B32")
+                textSize = 34f
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD_ITALIC)
+                isAntiAlias = true
+            }
+            canvas.drawText("My Food Diary", 50f, 65f, titlePaint)
+            
+            // Subtitle
+            val subtitlePaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.parseColor("#8C7A6B")
+                textSize = 13f
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.ITALIC)
+                isAntiAlias = true
+            }
+            val monthName = SimpleDateFormat("MMMM yyyy", Locale.US).format(Date())
+            canvas.drawText("☕ Cozy Café Memories | Generated for $monthName", 50f, 90f, subtitlePaint)
+            
+            // Curved decorative line under header
+            val linePaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.parseColor("#C2B29F")
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 2f
+                isAntiAlias = true
+            }
+            val path = android.graphics.Path()
+            path.moveTo(50f, 105f)
+            path.quadTo(300f, 112f, 545f, 105f)
+            canvas.drawPath(path, linePaint)
+            
+            // Draw a cute decorative heart on the title section
+            drawDoodleHeart(canvas, 520f, 55f, 12f, "#DF7862")
+            drawDoodleSparkle(canvas, 480f, 75f, 8f, "#FDB45C")
+        } else {
+            val subtitlePaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.parseColor("#8C7A6B")
+                textSize = 12f
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.ITALIC)
+                isAntiAlias = true
+            }
+            canvas.drawText("Food Diary — Page $pNum", 50f, 40f, subtitlePaint)
+            
+            val linePaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.parseColor("#C2B29F")
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 1.5f
+                isAntiAlias = true
+            }
+            val path = android.graphics.Path()
+            path.moveTo(50f, 50f)
+            path.quadTo(300f, 54f, 545f, 50f)
+            canvas.drawPath(path, linePaint)
+        }
+    }
+    
+    initPage(canvas, true, 1)
+    var currentY = 135f
+    
+    entries.forEachIndexed { index, entry ->
+        if (currentY + 225f > 800f) {
+            pdfDocument.finishPage(page)
+            pageNumber++
+            val newPageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNumber).create()
+            page = pdfDocument.startPage(newPageInfo)
+            canvas = page.canvas
+            
+            initPage(canvas, false, pageNumber)
+            currentY = 80f
+        }
+        
+        // Draw the scrapbook background card for the entry
+        val cardPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            style = android.graphics.Paint.Style.FILL
+        }
+        canvas.drawRoundRect(50f, currentY, 545f, currentY + 195f, 18f, 18f, cardPaint)
+        
+        val cardOutlinePaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#E6D8C8")
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 2f
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(50f, currentY, 545f, currentY + 195f, 18f, 18f, cardOutlinePaint)
+        
+        // Draw washi tape sticker at the top center of the card
+        val tapeColor = if (index % 2 == 0) "#D4C5B9" else "#C2B29F"
+        drawWashiTape(canvas, 297.5f, currentY, 70f, 15f, tapeColor, if (index % 2 == 0) -3f else 4f)
+        
+        var imgWidth = 0
+        if (entry.imageBytes != null) {
+            val opt = BitmapFactory.Options().apply {
+                inSampleSize = 1
+            }
+            val bitmap = try {
+                BitmapFactory.decodeByteArray(entry.imageBytes, 0, entry.imageBytes.size, opt)
+            } catch (e: Exception) {
+                null
+            }
+            if (bitmap != null) {
+                // Polaroid layout: rounded photo container
+                val polaroidFramePaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.parseColor("#FAF8F5")
+                    style = android.graphics.Paint.Style.FILL
+                }
+                val polaroidBorderPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.parseColor("#E0D2C0")
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeWidth = 1.5f
+                    isAntiAlias = true
+                }
+                
+                canvas.drawRoundRect(65f, currentY + 18f, 205f, currentY + 175f, 12f, 12f, polaroidFramePaint)
+                canvas.drawRoundRect(65f, currentY + 18f, 205f, currentY + 175f, 12f, 12f, polaroidBorderPaint)
+                
+                val srcRect = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
+                val destRect = android.graphics.Rect(72, (currentY + 24f).toInt(), 198, (currentY + 145f).toInt())
+                canvas.drawBitmap(bitmap, srcRect, destRect, paint)
+                
+                // Polaroid text label
+                val capPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.parseColor("#706050")
+                    textSize = 8.5f
+                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.ITALIC)
+                    isAntiAlias = true
+                }
+                val dateLabel = SimpleDateFormat("dd MMM, hh:mm a", Locale.US).format(Date(entry.date))
+                canvas.drawText("Logged $dateLabel", 82f, currentY + 163f, capPaint)
+                
+                imgWidth = 155
+                bitmap.recycle()
+            }
+        }
+        
+        val textStartX = 65f + imgWidth + (if (imgWidth > 0) 15f else 10f)
+        
+        // Date Text
+        val dateTextPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#8C7A6B")
+            textSize = 10f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.ITALIC)
+            isAntiAlias = true
+        }
+        val dateString = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.US).format(Date(entry.date))
+        canvas.drawText(dateString, textStartX, currentY + 35f, dateTextPaint)
+        
+        // Food details label (Cursive italic look style like pesto pasta / garlic bread)
+        val foodDetailsPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#3E2723") // Cozy dark brown
+            textSize = 18f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD_ITALIC)
+            isAntiAlias = true
+        }
+        val foodName = entry.foodDetails ?: "Delicious Dish 🍲"
+        canvas.drawText(foodName, textStartX, currentY + 65f, foodDetailsPaint)
+        
+        // Notes text
+        val notesPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#6D4C41")
+            textSize = 12f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.NORMAL)
+            isAntiAlias = true
+        }
+        val note = if (entry.description.startsWith("Quick Food") || entry.description.startsWith("Imported")) {
+            "Meal log entry"
+        } else {
+            entry.description
+        }
+        
+        // Wrap notes text slightly to avoid overflowing bounds
+        val maxNoteWidth = 525f - textStartX
+        val noteText = "Notes: $note"
+        if (notesPaint.measureText(noteText) > maxNoteWidth) {
+            val words = noteText.split(" ")
+            var line1 = ""
+            var line2 = ""
+            for (word in words) {
+                if (notesPaint.measureText("$line1$word ") < maxNoteWidth) {
+                    line1 += "$word "
+                } else {
+                    line2 += "$word "
+                }
+            }
+            canvas.drawText(line1.trim(), textStartX, currentY + 95f, notesPaint)
+            if (line2.isNotEmpty()) {
+                canvas.drawText(line2.trim(), textStartX, currentY + 112f, notesPaint)
+            }
+        } else {
+            canvas.drawText(noteText, textStartX, currentY + 95f, notesPaint)
+        }
+        
+        // Price amount tag badge (a cute sticker tag)
+        val amtBgPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#FFF3E0") // Light orange/yellow soft tag
+            style = android.graphics.Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val amtBorderPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#FFE0B2")
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 1f
+            isAntiAlias = true
+        }
+        val amtPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#E65100") // Rich orange/brown text
+            textSize = 16f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD_ITALIC)
+            isAntiAlias = true
+        }
+        
+        val formattedAmt = String.format(Locale.US, "৳%,.2f", entry.amount)
+        val textWidth = amtPaint.measureText(formattedAmt)
+        canvas.drawRoundRect(textStartX, currentY + 138f, textStartX + textWidth + 16f, currentY + 170f, 8f, 8f, amtBgPaint)
+        canvas.drawRoundRect(textStartX, currentY + 138f, textStartX + textWidth + 16f, currentY + 170f, 8f, 8f, amtBorderPaint)
+        canvas.drawText(formattedAmt, textStartX + 8f, currentY + 160f, amtPaint)
+        
+        // Add random doodle decorative elements to reinforce the scrapbook collage feel
+        if (index % 3 == 0) {
+            drawDoodleHeart(canvas, 515f, currentY + 155f, 10f, "#DF7862")
+            drawDoodleSparkle(canvas, 500f, currentY + 30f, 6f, "#FDB45C")
+        } else if (index % 3 == 1) {
+            drawDoodleSparkle(canvas, 515f, currentY + 155f, 8f, "#FDB45C")
+            drawDoodleHeart(canvas, 480f, currentY + 25f, 9f, "#A74D65")
+        } else {
+            drawDoodleHeart(canvas, 515f, currentY + 25f, 10f, "#DF7862")
+            drawDoodleSparkle(canvas, 475f, currentY + 160f, 7f, "#FDB45C")
+        }
+        
+        // Embellish the top corners or bottom corners with stars/dots
+        val dotPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.parseColor("#D4C5B9")
+            style = android.graphics.Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawCircle(58f, currentY + 185f, 2f, dotPaint)
+        canvas.drawCircle(537f, currentY + 185f, 2f, dotPaint)
+        canvas.drawCircle(58f, currentY + 10f, 2f, dotPaint)
+        canvas.drawCircle(537f, currentY + 10f, 2f, dotPaint)
+        
+        currentY += 215f
+    }
+    
+    pdfDocument.finishPage(page)
+    
+    val cacheDir = context.cacheDir
+    val pdfFile = File(cacheDir, "Food_Diary_${System.currentTimeMillis()}.pdf")
+    try {
+        val fos = FileOutputStream(pdfFile)
+        pdfDocument.writeTo(fos)
+        pdfDocument.close()
+        fos.close()
+        
+        val authority = "com.example.provider"
+        val pdfUri = androidx.core.content.FileProvider.getUriForFile(context, authority, pdfFile)
+        
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(android.content.Intent.EXTRA_STREAM, pdfUri)
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "My Food Diary PDF")
+            putExtra(android.content.Intent.EXTRA_TEXT, "Here is my food diary for the month!")
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(android.content.Intent.createChooser(intent, "Share Food Diary PDF"))
+    } catch (e: Exception) {
+        e.printStackTrace()
+        Toast.makeText(context, "Failed to generate PDF: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+@Composable
+fun HomeHeaderRow(
+    userName: String,
+    profileImageBitmap: Bitmap?,
+    hasUnreadNotifications: Boolean,
+    onNavigate: (String) -> Unit,
+    onShowNotifications: () -> Unit
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "bellScale"
+    )
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 2.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulseScale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulseAlpha"
+    )
+
+    val bellRotation by if (hasUnreadNotifications) {
+        val rotationTransition = rememberInfiniteTransition(label = "bellRotation")
+        rotationTransition.animateFloat(
+            initialValue = -8f,
+            targetValue = 8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "bellRotation"
+        )
+    } else {
+        remember { mutableStateOf(0f) }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(horizontalAlignment = Alignment.Start) {
+            Text(
+                text = "WELCOME BACK",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp,
+                    fontSize = 9.sp
+                ),
+                color = TextSecondary
+            )
+            Text(
+                text = userName,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Black,
+                    color = TextPrimary,
+                    letterSpacing = (-0.5).sp
+                )
+            )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(CardSurface)
+                    .clickable { onNavigate("profile") },
+                contentAlignment = Alignment.Center
+            ) {
+                if (profileImageBitmap != null) {
+                    Image(
+                        bitmap = profileImageBitmap.asImageBitmap(),
+                        contentDescription = "Settings Profile",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "Settings",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(CardSurface)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = LocalIndication.current
+                        ) { onShowNotifications() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Notifications,
+                        contentDescription = "Notifications",
+                        tint = if (hasUnreadNotifications) PrimaryAccent else TextPrimary,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .graphicsLayer { rotationZ = bellRotation }
+                    )
+                }
+
+                if (hasUnreadNotifications) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-1).dp, y = 1.dp)
+                            .size(10.dp)
+                            .graphicsLayer {
+                                scaleX = pulseScale
+                                scaleY = pulseScale
+                                alpha = pulseAlpha
+                            }
+                            .background(PrimaryAccent, CircleShape)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-1).dp, y = 1.dp)
+                            .size(10.dp)
+                            .border(1.5.dp, ThemeBackground, CircleShape)
+                            .background(PrimaryAccent, CircleShape)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeModeSwitcher(
+    selectedMode: String,
+    onModeSelected: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardSurface)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        listOf("personal" to "Personal Tracker", "group" to "Group Expenses").forEach { (mode, label) ->
+            val isSelected = selectedMode == mode
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isSelected) ThemeBackground else Color.Transparent)
+                    .clickable { onModeSelected(mode) }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) PrimaryAccent else TextSecondary
                 )
             }
         }

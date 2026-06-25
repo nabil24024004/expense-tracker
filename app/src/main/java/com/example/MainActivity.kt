@@ -16,6 +16,8 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.MainViewModel
 import com.example.ui.screens.AppNavigator
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -40,12 +42,15 @@ class MainActivity : FragmentActivity() {
     WindowCompat.setDecorFitsSystemWindows(window, false)
     enableEdgeToEdge()
     setContent {
-      MyApplicationTheme {
+      val viewModel: MainViewModel = viewModel()
+      val themeSelection by viewModel.themeSelection.collectAsState()
+      val isDarkMode by viewModel.isDarkMode.collectAsState()
+
+      MyApplicationTheme(themeSelection = themeSelection, isDarkMode = isDarkMode) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            val viewModel: MainViewModel = viewModel()
             AppNavigator(viewModel = viewModel, activity = this)
         }
       }

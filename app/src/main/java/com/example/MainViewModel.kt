@@ -30,7 +30,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val budgetLimit = MutableStateFlow(prefs.getFloat("budget_limit", 6000.0f).toDouble())
     val biometricsEnabled = MutableStateFlow(prefs.getBoolean("biometrics_enabled", false))
     
-    val themeSelection = MutableStateFlow(prefs.getString("theme_selection", "Neon Aurora") ?: "Neon Aurora")
+    val themeSelection = MutableStateFlow(prefs.getString("theme_selection", "Ocean Blue") ?: "Ocean Blue")
+    val isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
     val notificationsLastViewedTime = MutableStateFlow(prefs.getLong("notifications_last_viewed", 0L))
 
     init {
@@ -100,6 +101,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         themeSelection.value = themeName
     }
 
+    fun updateDarkMode(enabled: Boolean) {
+        prefs.edit().putBoolean("dark_mode", enabled).apply()
+        isDarkMode.value = enabled
+    }
+
     fun authenticate() {
         isAuthenticated.value = true
     }
@@ -114,10 +120,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         notificationsLastViewedTime.value = now
     }
 
-    fun addExpense(amount: Double, description: String, category: String) {
+    fun addExpense(
+        amount: Double,
+        description: String,
+        category: String,
+        date: Long = System.currentTimeMillis(),
+        imageBytes: ByteArray? = null,
+        foodDetails: String? = null
+    ) {
         viewModelScope.launch {
-            val date = System.currentTimeMillis()
-            val newExpense = Expense(amount = amount, description = description, category = category, date = date)
+            val newExpense = Expense(
+                amount = amount,
+                description = description,
+                category = category,
+                date = date,
+                imageBytes = imageBytes,
+                foodDetails = foodDetails
+            )
             
             val currentExpenses = expenses.value
             val oldTotal = currentExpenses.sumOf { it.amount }
@@ -235,7 +254,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             profileImageUri.value = null
             budgetLimit.value = 6000.0
             biometricsEnabled.value = false
-            themeSelection.value = "Neon Aurora"
+            themeSelection.value = "Blue/Black"
+            isDarkMode.value = false
             isAuthenticated.value = false
             notificationsLastViewedTime.value = 0L
         }

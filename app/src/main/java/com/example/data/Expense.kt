@@ -11,5 +11,7 @@ data class Expense(
     val category: String,
     val date: Long,
     val isSynced: Boolean = false,
-    val sheetRow: Int? = null
+    val sheetRow: Int? = null,
+    val imageBytes: ByteArray? = null,
+    val foodDetails: String? = null
 )

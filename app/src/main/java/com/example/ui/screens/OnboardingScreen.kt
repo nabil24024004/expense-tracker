@@ -16,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -29,6 +31,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.border
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.HorizontalDivider
 import com.example.MainViewModel
 import com.example.ui.components.GlassBox
 import com.example.ui.theme.*
@@ -94,7 +103,7 @@ fun ExploreIllustration(modifier: Modifier = Modifier) {
         }
         drawPath(
             path = portalPath,
-            color = Color(0xFFEA3B35)
+            color = Color(0xFF5483B3)
         )
         
 
@@ -106,7 +115,7 @@ fun ExploreIllustration(modifier: Modifier = Modifier) {
         
 
         drawCircle(
-            color = Color(0xFFEA3B35),
+            color = Color(0xFF5483B3),
             radius = scale * 0.07f,
             center = Offset(centerX + scale * 0.28f, centerY - scale * 0.4f + (scale * floatOffset))
         )
@@ -193,7 +202,7 @@ fun DiscoveryIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX, centerY + scale * 0.16f)
             close()
         }
-        drawPath(headPath, Color(0xFFEA3B35))
+        drawPath(headPath, Color(0xFF5483B3))
         
 
         val openingPath = androidx.compose.ui.graphics.Path().apply {
@@ -211,7 +220,7 @@ fun DiscoveryIllustration(modifier: Modifier = Modifier) {
             rotate(rotation)
         }) {
             drawRect(
-                color = Color(0xFFEA3B35),
+                color = Color(0xFF5483B3),
                 topLeft = Offset(-scale * 0.05f, -scale * 0.05f),
                 size = Size(scale * 0.1f, scale * 0.1f)
             )
@@ -306,7 +315,7 @@ fun CreateIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX, centerY)
             close()
         }
-        drawPath(topSand, Color(0xFFEA3B35))
+        drawPath(topSand, Color(0xFF5483B3))
 
 
         val bottomSand = androidx.compose.ui.graphics.Path().apply {
@@ -315,18 +324,38 @@ fun CreateIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX, centerY)
             close()
         }
-        drawPath(bottomSand, Color(0xFFEA3B35))
+        drawPath(bottomSand, Color(0xFF5483B3))
 
 
         drawCircle(
-            color = Color(0xFFEA3B35),
+            color = Color(0xFF5483B3),
             radius = scale * 0.012f,
             center = Offset(centerX, centerY + (scale * sand1Y))
         )
         drawCircle(
-            color = Color(0xFFEA3B35),
+            color = Color(0xFF5483B3),
             radius = scale * 0.01f,
             center = Offset(centerX, centerY + (scale * sand2Y))
+        )
+    }
+}
+
+@Composable
+fun SocialIconBadge(text: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.1f))
+            .border(1.dp, color.copy(alpha = 0.2f), CircleShape)
+            .clickable { /* decorative only */ },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = color,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -343,49 +372,17 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (onboardingStep < 4) Color.White else ThemeBackground)
+            .background(Color(0xFF021024))
     ) {
+        // Fullscreen wave background image
+        Image(
+            painter = painterResource(id = com.example.R.drawable.login_background),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
         if (onboardingStep < 4) {
-
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-                
-                when (onboardingStep) {
-                    1 -> {
-
-                        drawCircle(
-                            color = Color(0xFFEA3B35),
-                            radius = 180f,
-                            center = Offset(0f, h)
-                        )
-
-                        drawCircle(
-                            color = Color(0xFFEA3B35),
-                            radius = 35f,
-                            center = Offset(w * 0.75f, 150f)
-                        )
-                    }
-                    2 -> {
-
-                        drawCircle(
-                            color = Color(0xFFEA3B35),
-                            radius = 140f,
-                            center = Offset(w, 0f)
-                        )
-                    }
-                    3 -> {
-
-                        drawCircle(
-                            color = Color(0xFFEA3B35),
-                            radius = 200f,
-                            center = Offset(w, h)
-                        )
-                    }
-                }
-            }
-
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -394,7 +391,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-
+                // Header (Back / Skip)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -405,7 +402,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             text = "Back",
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = TextSecondary
+                                color = Color.White.copy(alpha = 0.8f)
                             ),
                             modifier = Modifier
                                 .clickable { onboardingStep-- }
@@ -414,13 +411,12 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                     } else {
                         Spacer(modifier = Modifier.size(40.dp))
                     }
-                    
 
                     Text(
                         text = "Skip",
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = TextSecondary
+                            color = Color.White.copy(alpha = 0.8f)
                         ),
                         modifier = Modifier
                             .clickable { onboardingStep = 4 }
@@ -428,7 +424,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                     )
                 }
 
-
+                // Illustration + Title & Subtitle
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
@@ -446,7 +442,6 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             3 -> CreateIllustration(modifier = Modifier.fillMaxSize())
                         }
                     }
-
 
                     val titleText = when (onboardingStep) {
                         1 -> "TRACK"
@@ -466,10 +461,10 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             letterSpacing = (-0.5).sp,
                             fontSize = 32.sp
                         ),
-                        color = Color(0xFF1E1E1E),
+                        color = Color.White,
                         textAlign = TextAlign.Center
                     )
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
@@ -478,13 +473,13 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             fontWeight = FontWeight.Medium,
                             lineHeight = 22.sp
                         ),
-                        color = Color.Gray,
+                        color = Color.White.copy(alpha = 0.8f),
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 24.dp)
                     )
                 }
 
-
+                // Footer (Dot Indicators + Action Button)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -493,7 +488,6 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (onboardingStep < 3) {
-
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -509,29 +503,27 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                                     modifier = Modifier
                                         .size(width = dotWidth, height = 8.dp)
                                         .clip(CircleShape)
-                                        .background(if (isActive) Color(0xFF1E1E1E) else Color.LightGray)
+                                        .background(if (isActive) Color.White else Color.White.copy(alpha = 0.4f))
                                 )
                             }
                         }
-
 
                         Box(
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF1E1E1E))
+                                .background(Color.White)
                                 .clickable { onboardingStep++ },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                 contentDescription = "Next",
-                                tint = Color.White,
+                                tint = Color(0xFF021024),
                                 modifier = Modifier.size(24.dp)
                             )
                         }
                     } else {
-
                         Button(
                             onClick = { onboardingStep = 4 },
                             modifier = Modifier
@@ -539,8 +531,8 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                                 .height(56.dp),
                             shape = RoundedCornerShape(28.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1E1E1E),
-                                contentColor = Color.White
+                                containerColor = Color.White,
+                                contentColor = Color(0xFF021024)
                             )
                         ) {
                             Text(
@@ -555,35 +547,26 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                 }
             }
         } else {
-
-
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(85.dp)
-            ) {
-                drawCircle(Color(0xFF020203).copy(alpha = 0.08f), radius = size.width * 0.7f, center = Offset(size.width * 0.2f, size.height * 0.1f))
-                drawCircle(Color(0xFFEA3B35).copy(alpha = 0.06f), radius = size.width * 0.8f, center = Offset(size.width * 0.8f, size.height * 0.8f))
-            }
-
+            // Step 4: Redesigned Welcome/Login Screen (matches Mockup)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp)
                     .systemBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-
+                // Header Back Button
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.Start
                 ) {
                     Text(
                         text = "Back",
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = TextSecondary
+                            color = Color.White.copy(alpha = 0.8f)
                         ),
                         modifier = Modifier
                             .clickable { onboardingStep = 3 }
@@ -591,164 +574,147 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                     )
                 }
 
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Welcome Header (transparent part)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
+                ) {
                     Text(
                         text = "Welcome to",
                         style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 24.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Medium,
-                            color = TextSecondary
+                            color = Color.White.copy(alpha = 0.8f)
                         )
                     )
                     Text(
                         text = "Expense Tracker",
                         style = MaterialTheme.typography.displayMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            fontSize = 36.sp,
                             letterSpacing = (-1).sp
                         )
                     )
-                    Text(
-                        text = "Let's personalize your dashboard",
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            color = TextSecondary
-                        ),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
                 }
 
-
-                GlassBox(
+                // Bottom Login-style Profile Config Sheet Card
+                Card(
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    isDark = false
+                        .weight(1f)
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
                             .padding(28.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Your Profile",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary
+                            text = "Get Started",
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF021024)
+                            ),
+                            modifier = Modifier.align(Alignment.Start)
                         )
-
 
                         OutlinedTextField(
                             value = name,
                             onValueChange = { name = it },
                             label = { Text("What is your name?") },
-                            leadingIcon = { Icon(Icons.Rounded.Face, contentDescription = "Name", tint = TextSecondary) },
-                            modifier = Modifier.fillMaxWidth().testTag("onboarding_name"),
+                            leadingIcon = { Icon(Icons.Rounded.Face, contentDescription = "Name", tint = Color(0xFF052659)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("onboarding_name"),
                             shape = RoundedCornerShape(12.dp),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = PrimaryAccent,
-                                unfocusedBorderColor = CardSurface,
-                                focusedLabelColor = PrimaryAccent,
-                                unfocusedLabelColor = TextSecondary,
-                                cursorColor = PrimaryAccent
+                                focusedBorderColor = Color(0xFF5483B3),
+                                unfocusedBorderColor = Color(0xFFC1E8FF),
+                                focusedLabelColor = Color(0xFF5483B3),
+                                unfocusedLabelColor = Color(0xFF7DA0CA),
+                                cursorColor = Color(0xFF5483B3)
                             )
                         )
-
 
                         OutlinedTextField(
                             value = budget,
                             onValueChange = { budget = it },
                             label = { Text("Monthly Budget Limit (৳)") },
-                            leadingIcon = { Icon(Icons.Rounded.Wallet, contentDescription = "Budget", tint = TextSecondary) },
+                            leadingIcon = { Icon(Icons.Rounded.Wallet, contentDescription = "Budget", tint = Color(0xFF052659)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth().testTag("onboarding_budget"),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("onboarding_budget"),
                             shape = RoundedCornerShape(12.dp),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = PrimaryAccent,
-                                unfocusedBorderColor = CardSurface,
-                                focusedLabelColor = PrimaryAccent,
-                                unfocusedLabelColor = TextSecondary,
-                                cursorColor = PrimaryAccent
+                                focusedBorderColor = Color(0xFF5483B3),
+                                unfocusedBorderColor = Color(0xFFC1E8FF),
+                                focusedLabelColor = Color(0xFF5483B3),
+                                unfocusedLabelColor = Color(0xFF7DA0CA),
+                                cursorColor = Color(0xFF5483B3)
                             )
                         )
-
 
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clickable { enableBiometrics = !enableBiometrics }
                                 .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Fingerprint,
-                                    contentDescription = "Biometrics",
-                                    tint = PrimaryAccent
-                                )
-                                Column {
-                                    Text(
-                                        text = "Enable Biometric Lock",
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = TextPrimary
-                                        )
-                                    )
-                                    Text(
-                                        text = "Protect your app access",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-                            Switch(
+                            Checkbox(
                                 checked = enableBiometrics,
-                                onCheckedChange = { enableBiometrics = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = PrimaryAccent,
-                                    uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = CardSurface
-                                ),
-                                modifier = Modifier.testTag("onboarding_biometrics_toggle")
+                                onCheckedChange = { enableBiometrics = it ?: false },
+                                colors = CheckboxDefaults.colors(checkedColor = Color(0xFF5483B3))
+                            )
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text(
+                                    text = "Enable Biometric Lock",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF021024)
+                                    )
+                                )
+                                Text(
+                                    text = "Protect your app access",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color(0xFF7DA0CA)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = {
+                                val finalName = name.ifEmpty { "User" }
+                                val finalBudget = budget.toDoubleOrNull() ?: 6000.0
+                                viewModel.completeOnboarding(finalName, finalBudget, enableBiometrics)
+                                onOnboardingComplete()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("onboarding_start_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF5483B3),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(
+                                text = "Get Started",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                         }
-                    }
-                }
-
-
-                Button(
-                    onClick = {
-                        val finalName = name.ifEmpty { "User" }
-                        val finalBudget = budget.toDoubleOrNull() ?: 6000.0
-                        viewModel.completeOnboarding(finalName, finalBudget, enableBiometrics)
-                        onOnboardingComplete()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .testTag("onboarding_start_btn"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryAccent,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Rounded.CheckCircle, contentDescription = "Check")
-                        Text(
-                            text = "Get Started",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
