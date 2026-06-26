@@ -36,6 +36,8 @@ import com.example.ui.theme.*
 
 @Composable
 fun ExploreIllustration(modifier: Modifier = Modifier) {
+    val outlineColor = TextPrimary
+    val gateInnerColor = if (LocalAppColors.current == DarkAppColors) Color(0xFF1E1E22) else Color(0xFF0C0C0C)
     val infiniteTransition = rememberInfiniteTransition(label = "explore")
     val floatOffset by infiniteTransition.animateFloat(
         initialValue = -0.05f,
@@ -64,19 +66,19 @@ fun ExploreIllustration(modifier: Modifier = Modifier) {
 
 
         drawRect(
-            color = Color(0xFF1E1E1E),
+            color = outlineColor,
             topLeft = Offset(centerX - scale * 0.2f, centerY - scale * 0.3f),
             size = Size(scale * 0.06f, scale * 0.55f)
         )
 
         drawRect(
-            color = Color(0xFF1E1E1E),
+            color = outlineColor,
             topLeft = Offset(centerX + scale * 0.14f, centerY - scale * 0.3f),
             size = Size(scale * 0.06f, scale * 0.55f)
         )
 
         drawArc(
-            color = Color(0xFF1E1E1E),
+            color = outlineColor,
             startAngle = 180f,
             sweepAngle = 180f,
             useCenter = false,
@@ -99,7 +101,7 @@ fun ExploreIllustration(modifier: Modifier = Modifier) {
         
 
         drawOval(
-            color = Color(0xFF0C0C0C),
+            color = gateInnerColor,
             topLeft = Offset(centerX - scale * 0.08f, centerY - scale * 0.1f),
             size = Size(scale * 0.16f, scale * 0.3f)
         )
@@ -116,7 +118,7 @@ fun ExploreIllustration(modifier: Modifier = Modifier) {
             val stepY = centerY + scale * 0.25f + (i * scale * 0.04f)
             val stepW = scale * 0.26f - (i * scale * 0.03f)
             drawRect(
-                color = Color(0xFF1E1E1E),
+                color = outlineColor,
                 topLeft = Offset(centerX - (stepW / 2), stepY),
                 size = Size(stepW, scale * 0.03f)
             )
@@ -127,6 +129,8 @@ fun ExploreIllustration(modifier: Modifier = Modifier) {
 
 @Composable
 fun DiscoveryIllustration(modifier: Modifier = Modifier) {
+    val outlineColor = TextPrimary
+    val gateInnerColor = if (LocalAppColors.current == DarkAppColors) Color(0xFF1E1E22) else Color(0xFF0C0C0C)
     val infiniteTransition = rememberInfiniteTransition(label = "discovery")
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -169,7 +173,7 @@ fun DiscoveryIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX, centerY + scale * 0.3f)
             close()
         }
-        drawPath(platformPath, Color(0xFF1E1E1E))
+        drawPath(platformPath, outlineColor)
 
 
         val platformSidePath = androidx.compose.ui.graphics.Path().apply {
@@ -181,7 +185,7 @@ fun DiscoveryIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX - scale * 0.28f, centerY + scale * 0.23f)
             close()
         }
-        drawPath(platformSidePath, Color(0xFF0C0C0C))
+        drawPath(platformSidePath, gateInnerColor)
 
 
         val headPath = androidx.compose.ui.graphics.Path().apply {
@@ -203,7 +207,7 @@ fun DiscoveryIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX, centerY - scale * 0.02f)
             close()
         }
-        drawPath(openingPath, Color(0xFF1E1E1E))
+        drawPath(openingPath, outlineColor)
 
 
         withTransform({
@@ -216,7 +220,7 @@ fun DiscoveryIllustration(modifier: Modifier = Modifier) {
                 size = Size(scale * 0.1f, scale * 0.1f)
             )
             drawRect(
-                color = Color(0xFF1E1E1E),
+                color = outlineColor,
                 topLeft = Offset(-scale * 0.035f, -scale * 0.035f),
                 size = Size(scale * 0.07f, scale * 0.07f)
             )
@@ -227,6 +231,7 @@ fun DiscoveryIllustration(modifier: Modifier = Modifier) {
 
 @Composable
 fun CreateIllustration(modifier: Modifier = Modifier) {
+    val outlineColor = TextPrimary
     val infiniteTransition = rememberInfiniteTransition(label = "create")
     val sand1Y by infiniteTransition.animateFloat(
         initialValue = -0.1f,
@@ -269,7 +274,7 @@ fun CreateIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX, centerY - scale * 0.19f)
             close()
         }
-        drawPath(topLid, Color(0xFF1E1E1E))
+        drawPath(topLid, outlineColor)
 
 
         val bottomLid = androidx.compose.ui.graphics.Path().apply {
@@ -279,7 +284,7 @@ fun CreateIllustration(modifier: Modifier = Modifier) {
             lineTo(centerX, centerY + scale * 0.33f)
             close()
         }
-        drawPath(bottomLid, Color(0xFF1E1E1E))
+        drawPath(bottomLid, outlineColor)
 
 
         val topGlass = androidx.compose.ui.graphics.Path().apply {
@@ -343,7 +348,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (onboardingStep < 4) Color.White else ThemeBackground)
+            .background(if (onboardingStep < 4 && LocalAppColors.current != DarkAppColors) Color.White else ThemeBackground)
     ) {
         if (onboardingStep < 4) {
 
@@ -466,7 +471,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             letterSpacing = (-0.5).sp,
                             fontSize = 32.sp
                         ),
-                        color = Color(0xFF1E1E1E),
+                        color = TextPrimary,
                         textAlign = TextAlign.Center
                     )
                     
@@ -478,7 +483,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             fontWeight = FontWeight.Medium,
                             lineHeight = 22.sp
                         ),
-                        color = Color.Gray,
+                        color = TextSecondary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 24.dp)
                     )
@@ -509,7 +514,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                                     modifier = Modifier
                                         .size(width = dotWidth, height = 8.dp)
                                         .clip(CircleShape)
-                                        .background(if (isActive) Color(0xFF1E1E1E) else Color.LightGray)
+                                        .background(if (isActive) TextPrimary else TextSecondary.copy(alpha = 0.4f))
                                 )
                             }
                         }
@@ -519,14 +524,14 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF1E1E1E))
+                                .background(TextPrimary)
                                 .clickable { onboardingStep++ },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                 contentDescription = "Next",
-                                tint = Color.White,
+                                tint = ThemeBackground,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -539,8 +544,8 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                                 .height(56.dp),
                             shape = RoundedCornerShape(28.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1E1E1E),
-                                contentColor = Color.White
+                                containerColor = TextPrimary,
+                                contentColor = ThemeBackground
                             )
                         ) {
                             Text(
@@ -624,7 +629,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                         .fillMaxWidth()
                         .padding(vertical = 24.dp),
                     shape = RoundedCornerShape(24.dp),
-                    isDark = false
+                    isDark = (LocalAppColors.current == DarkAppColors)
                 ) {
                     Column(
                         modifier = Modifier

@@ -30,7 +30,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val budgetLimit = MutableStateFlow(prefs.getFloat("budget_limit", 6000.0f).toDouble())
     val biometricsEnabled = MutableStateFlow(prefs.getBoolean("biometrics_enabled", false))
     
-    val themeSelection = MutableStateFlow(prefs.getString("theme_selection", "Neon Aurora") ?: "Neon Aurora")
+    val themeSelection = MutableStateFlow(prefs.getString("theme_selection", "Light") ?: "Light")
     val notificationsLastViewedTime = MutableStateFlow(prefs.getLong("notifications_last_viewed", 0L))
 
     init {
@@ -235,7 +235,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             profileImageUri.value = null
             budgetLimit.value = 6000.0
             biometricsEnabled.value = false
-            themeSelection.value = "Neon Aurora"
+            themeSelection.value = "Light"
             isAuthenticated.value = false
             notificationsLastViewedTime.value = 0L
         }

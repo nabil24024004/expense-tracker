@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.ui.theme.*
 
 @Composable
 fun SimpleBarChart(
@@ -22,13 +23,22 @@ fun SimpleBarChart(
     
     val maxVal = data.maxOfOrNull { it.second } ?: 1.0
     val safeMax = if (maxVal == 0.0) 1.0 else maxVal
+    
+    val accent = PrimaryAccent
+    val textPrimary = TextPrimary
+    val textSecondary = TextSecondary
+    val slate = Color(0xFF94A3B8)
+    val cardSurface = CardSurface
+    
     val colors = listOf(
-        Color(0xFFEA3B35),
-        Color(0xFF020203),
-        Color(0xFF767677),
-        Color(0xFF94A3B8),
-        Color(0xFFE5E5E2)
+        accent,
+        textPrimary,
+        textSecondary,
+        slate,
+        cardSurface
     )
+
+    val trackColor = CardSurface
 
     Canvas(modifier = modifier.fillMaxWidth().height(160.dp)) {
         val width = size.width
@@ -46,7 +56,7 @@ fun SimpleBarChart(
             
 
             drawRoundRect(
-                color = Color(0xFFE5E5E2),
+                color = trackColor,
                 topLeft = Offset(currentX, height - (height * 0.8f).toFloat()),
                 size = Size(barWidth, (height * 0.8f).toFloat()),
                 cornerRadius = CornerRadius(12f, 12f)
@@ -65,3 +75,4 @@ fun SimpleBarChart(
         }
     }
 }
+

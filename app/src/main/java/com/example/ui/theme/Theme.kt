@@ -18,17 +18,32 @@ import androidx.compose.ui.graphics.toArgb
 import android.app.Activity
 import androidx.core.view.WindowCompat
 
-private val ModernColorScheme =
+import androidx.compose.runtime.CompositionLocalProvider
+
+private val LightColorScheme =
   lightColorScheme(
     primary = PrimaryAccent,
-    secondary = TextSecondary,
-    tertiary = CardSurface,
-    background = ThemeBackground,
-    surface = CardSurface,
+    secondary = LightAppColors.textSecondary,
+    tertiary = LightAppColors.cardSurface,
+    background = LightAppColors.background,
+    surface = LightAppColors.cardSurface,
     error = Color(0xFFEA3B35),
     onPrimary = Color.White,
-    onBackground = TextPrimary,
-    onSurface = TextPrimary
+    onBackground = LightAppColors.textPrimary,
+    onSurface = LightAppColors.textPrimary
+  )
+
+private val DarkColorScheme =
+  darkColorScheme(
+    primary = PrimaryAccent,
+    secondary = DarkAppColors.textSecondary,
+    tertiary = DarkAppColors.cardSurface,
+    background = DarkAppColors.background,
+    surface = DarkAppColors.cardSurface,
+    error = Color(0xFFEA3B35),
+    onPrimary = Color.White,
+    onBackground = DarkAppColors.textPrimary,
+    onSurface = DarkAppColors.textPrimary
   )
 
 @Composable
@@ -43,10 +58,16 @@ fun MyApplicationTheme(
       val window = (view.context as? Activity)?.window
       if (window != null) {
         window.statusBarColor = Color.Transparent.toArgb()
-        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
+        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
       }
     }
   }
 
-  MaterialTheme(colorScheme = ModernColorScheme, typography = Typography, content = content)
+  val colors = if (darkTheme) DarkAppColors else LightAppColors
+  val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+
+  CompositionLocalProvider(LocalAppColors provides colors) {
+    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+  }
 }
+

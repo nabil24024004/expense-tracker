@@ -20,6 +20,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+
 class MainActivity : FragmentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -40,16 +43,23 @@ class MainActivity : FragmentActivity() {
     WindowCompat.setDecorFitsSystemWindows(window, false)
     enableEdgeToEdge()
     setContent {
-      MyApplicationTheme {
+      val viewModel: MainViewModel = viewModel()
+      val themeSelection by viewModel.themeSelection.collectAsState()
+      val darkTheme = when (themeSelection) {
+          "Dark" -> true
+          "Light" -> false
+          else -> androidx.compose.foundation.isSystemInDarkTheme()
+      }
+      MyApplicationTheme(darkTheme = darkTheme) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            val viewModel: MainViewModel = viewModel()
             AppNavigator(viewModel = viewModel, activity = this)
         }
       }
     }
   }
 }
+
 

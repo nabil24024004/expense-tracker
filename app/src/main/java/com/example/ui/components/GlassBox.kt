@@ -12,12 +12,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.example.ui.theme.LocalAppColors
+import com.example.ui.theme.DarkAppColors
 
 @Composable
 fun GlassBox(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(24.dp),
-    isDark: Boolean = false,
+    isDark: Boolean = LocalAppColors.current == DarkAppColors,
     content: @Composable BoxScope.() -> Unit
 ) {
     val backgroundBrush = if (isDark) {

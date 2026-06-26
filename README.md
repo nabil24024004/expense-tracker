@@ -1,4 +1,4 @@
-# Expense Tracker (v4.2)
+# Expense Tracker (v4.3)
 
 [📥 **Download Latest Release APK**](file:///d:/expense-tracker/app/build/outputs/apk/release/app-release.apk)
 

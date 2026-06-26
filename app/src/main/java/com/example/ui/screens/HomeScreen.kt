@@ -457,13 +457,13 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                     Icon(
                                         imageVector = icon,
                                         contentDescription = label,
-                                        tint = if (isSelected) DarkCardSurface else TextSecondary,
+                                        tint = if (isSelected) TextPrimary else TextSecondary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     if (isSelected) {
                                         Text(
                                             text = label,
-                                            color = DarkCardSurface,
+                                            color = TextPrimary,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 12.sp,
                                             maxLines = 1
@@ -524,7 +524,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Budget Exceeded",
                             text = "You've overspent by ৳${String.format(Locale.US, "%,.0f", totalAmount - budgetLimit)}. Review your recent expenses.",
                             icon = Icons.Rounded.Error,
-                            color = PrimaryAccent,
+                            colorType = "accent",
                             severity = 2
                         ))
                     } else if (percentUsed >= 80) {
@@ -532,7 +532,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "High Spending Alert",
                             text = "$percentUsed% of budget used (৳${String.format(Locale.US, "%,.0f", budgetLimit - totalAmount)} remaining).",
                             icon = Icons.Rounded.Warning,
-                            color = PrimaryAccent,
+                            colorType = "accent",
                             severity = 1
                         ))
                     } else if (expenses.isNotEmpty()) {
@@ -540,7 +540,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Budget On Track",
                             text = "$percentUsed% used — ৳${String.format(Locale.US, "%,.0f", budgetLimit - totalAmount)} remaining this month.",
                             icon = Icons.Rounded.CheckCircle,
-                            color = TextPrimary,
+                            colorType = "primary",
                             severity = 0
                         ))
                     }
@@ -559,7 +559,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Top Category: ${it.key}",
                                 text = "৳${String.format(Locale.US, "%,.0f", topAmt)} spent ($topPct% of total). ${if (topPct > 50) "Consider diversifying your spending." else ""}",
                                 icon = Icons.Rounded.BarChart,
-                                color = PrimaryAccent,
+                                colorType = if (topPct > 50) "accent" else "secondary",
                                 severity = if (topPct > 50) 1 else 0
                             ))
                         }
@@ -570,7 +570,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Avg. Transaction: ৳${String.format(Locale.US, "%,.0f", avgPerTxn)}",
                             text = "Across ${expenses.size} total transactions.",
                             icon = Icons.Rounded.Calculate,
-                            color = TextPrimary,
+                            colorType = "primary",
                             severity = 0
                         ))
 
@@ -580,7 +580,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "$catCount Active ${if (catCount == 1) "Category" else "Categories"}",
                             text = categoryGroups.keys.joinToString(", "),
                             icon = Icons.Rounded.Category,
-                            color = TextSecondary,
+                            colorType = "secondary",
                             severity = 0
                         ))
                     }
@@ -602,7 +602,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Today's Spending: ৳${String.format(Locale.US, "%,.0f", todayTotal)}",
                                 text = "${todayExpenses.size} transaction${if (todayExpenses.size > 1) "s" else ""} logged today.",
                                 icon = Icons.Rounded.Today,
-                                color = TextPrimary,
+                                colorType = "primary",
                                 severity = 0
                             ))
                         } else {
@@ -610,7 +610,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "No Spending Today",
                                 text = "Great discipline! Keep it going.",
                                 icon = Icons.Rounded.Savings,
-                                color = TextSecondary,
+                                colorType = "secondary",
                                 severity = 0
                             ))
                         }
@@ -633,7 +633,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Savings Forecast: +৳${String.format(Locale.US, "%,.0f", predictedSavings)}",
                                 text = "At current pace, you'll save ৳${String.format(Locale.US, "%,.0f", predictedSavings)} this month.",
                                 icon = Icons.Rounded.TrendingDown,
-                                color = TextPrimary,
+                                colorType = "primary",
                                 severity = 0
                             ))
                         } else {
@@ -641,7 +641,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Over-Budget Warning",
                                 text = "Projected to exceed budget by ৳${String.format(Locale.US, "%,.0f", -predictedSavings)}. Reduce daily spending.",
                                 icon = Icons.Rounded.TrendingUp,
-                                color = PrimaryAccent,
+                                colorType = "accent",
                                 severity = 2
                             ))
                         }
@@ -658,7 +658,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Last Transaction",
                             text = "৳${String.format(Locale.US, "%,.0f", latest.amount)} — ${latest.description.ifEmpty { latest.category }} (${sdf.format(Date(latest.date))})",
                             icon = Icons.Rounded.Receipt,
-                            color = TextSecondary,
+                            colorType = "secondary",
                             severity = 0
                         ))
 
@@ -669,7 +669,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 title = "Biggest Expense: ৳${String.format(Locale.US, "%,.0f", it.amount)}",
                                 text = "${it.description.ifEmpty { it.category }} in ${it.category}.",
                                 icon = Icons.Rounded.Lightbulb,
-                                color = TextPrimary,
+                                colorType = "primary",
                                 severity = 0
                             ))
                         }
@@ -678,7 +678,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             title = "Get Started",
                             text = "Tap the bolt button to log your first expense and unlock insights!",
                             icon = Icons.Rounded.Lightbulb,
-                            color = TextSecondary,
+                            colorType = "secondary",
                             severity = 0
                         ))
                     }
@@ -1637,9 +1637,13 @@ fun AnalyticsTab(
 
 
     val chartColors = listOf(
-        Color(0xFF3B82F6), Color(0xFF8B5CF6), Color(0xFFEC4899),
-        Color(0xFFF59E0B), Color(0xFF10B981), Color(0xFF06B6D4),
-        Color(0xFFEF4444)
+        Color(0xFFEA3B35), // Accent Red
+        Color(0xFF8B5CF6), // Purple
+        Color(0xFFEC4899), // Pink
+        Color(0xFFF59E0B), // Orange/Amber
+        Color(0xFF10B981), // Green
+        Color(0xFF64748B), // Slate Grey
+        Color(0xFFEAB308)  // Yellow
     )
 
     // Debts & Dues Calculations
@@ -4331,6 +4335,64 @@ fun ProfileTab(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
+                        text = "App Theme",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (themeSelection == "Dark") Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
+                                contentDescription = "Theme Icon",
+                                tint = PrimaryAccent,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Dark Mode",
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = if (themeSelection == "Dark") "Dark theme active" else "Light theme active",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = themeSelection == "Dark",
+                            onCheckedChange = { isDark ->
+                                viewModel.updateTheme(if (isDark) "Dark" else "Light")
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = PrimaryAccent,
+                                uncheckedThumbColor = TextSecondary,
+                                uncheckedTrackColor = ThemeBackground,
+                                uncheckedBorderColor = CardSurface
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
                         text = "Account Management",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = TextPrimary,
@@ -4558,7 +4620,7 @@ fun ProfileTab(
 fun ExpenseItem(expense: Expense, onDelete: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy, h:mm a", Locale.US) }
     val dateStr = remember(expense.date) { dateFormat.format(Date(expense.date)) }
-    val style = remember(expense.category) { getCategoryStyle(expense.category) }
+    val style = getCategoryStyle(expense.category)
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -4689,6 +4751,7 @@ fun DeveloperActionButton(
 }
 
 
+@Composable
 fun getCategoryStyle(category: String): Triple<androidx.compose.ui.graphics.vector.ImageVector, Color, Color> {
     val cleanCategory = category.lowercase(Locale.US).trim()
     val icon = when (cleanCategory) {
@@ -4729,13 +4792,18 @@ data class NotificationItem(
     val title: String,
     val text: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val color: Color,
+    val colorType: String,
     val severity: Int = 0
 )
 
 
 @Composable
 private fun NotificationCard(item: NotificationItem) {
+    val iconTint = when (item.colorType) {
+        "accent" -> PrimaryAccent
+        "primary" -> TextPrimary
+        else -> TextSecondary
+    }
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = CardSurface,
@@ -4755,7 +4823,7 @@ private fun NotificationCard(item: NotificationItem) {
                 Icon(
                     imageVector = item.icon,
                     contentDescription = null,
-                    tint = item.color,
+                    tint = iconTint,
                     modifier = Modifier.size(18.dp)
                 )
             }
