@@ -16,3 +16,4 @@
 local.properties
 .env
 debug.keystore
+firebase-applet-config.json
