@@ -11,5 +11,9 @@ data class Expense(
     val category: String,
     val date: Long,
     val isSynced: Boolean = false,
-    val sheetRow: Int? = null
+    val sheetRow: Int? = null,
+    val type: String = "EXPENSE",
+    val accountId: Int? = null,
+    val toAccountId: Int? = null,
+    val tags: String = ""
 )

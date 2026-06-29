@@ -26,6 +26,7 @@ class NotificationReceiver : BroadcastReceiver() {
         
         val type = intent.getStringExtra("type")
         if (type != null) {
+            NotificationHelper.scheduleDailyReminders(context)
             val pendingResult = goAsync()
             val database = AppDatabase.getDatabase(context)
             CoroutineScope(Dispatchers.IO).launch {

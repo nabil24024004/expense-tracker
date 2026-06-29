@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.data.Account
+import com.example.data.PlannedTransaction
 import android.widget.Toast
 import android.content.Context
 import android.content.Intent
@@ -66,6 +68,8 @@ import androidx.fragment.app.FragmentActivity
 import com.example.MainViewModel
 import com.example.data.Expense
 import com.example.data.DebtDue
+import com.example.data.BudgetPeriodHelper
+import com.example.data.PeriodProjection
 import com.example.ui.screens.AddDebtDueDialog
 import com.example.ui.screens.DebtsSection
 import com.example.ui.components.GlassBox
@@ -137,8 +141,21 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
         notificationsLastViewedTime == 0L || expenses.any { it.date > notificationsLastViewedTime }
     }
     
+    val budgetPeriodType by viewModel.budgetPeriodType.collectAsState()
+    val budgetCustomStartDate by viewModel.budgetCustomStartDate.collectAsState()
+    val budgetCustomEndDate by viewModel.budgetCustomEndDate.collectAsState()
+
+    val activePeriodRange = remember(budgetPeriodType, budgetCustomStartDate, budgetCustomEndDate) {
+        BudgetPeriodHelper.getPeriodRange(budgetPeriodType, budgetCustomStartDate, budgetCustomEndDate)
+    }
+
+    val activePeriodSpent = remember(expenses, activePeriodRange) {
+        expenses.filter { it.type == "EXPENSE" && it.date in activePeriodRange.first..activePeriodRange.second }.sumOf { it.amount }
+    }
+
     var currentTab by remember { mutableStateOf("home") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var showEditBudgetDialog by remember { mutableStateOf(false) }
     var addDialogPrefillCategory by remember { mutableStateOf("") }
     
     val debtsDues by viewModel.debtsDues.collectAsState()
@@ -146,6 +163,18 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
     var showAddDebtDueDialog by remember { mutableStateOf(false) }
     var showAddChoiceDialog by remember { mutableStateOf(false) }
     
+    // Accounts and Planned transactions states
+    val accounts by viewModel.accounts.collectAsState()
+    val plannedTransactions by viewModel.plannedTransactions.collectAsState()
+    val hideBalance by viewModel.hideBalance.collectAsState()
+    var showAddAccountDialog by remember { mutableStateOf(false) }
+    var showTransferDialog by remember { mutableStateOf(false) }
+    var showAllAccountsDialog by remember { mutableStateOf(false) }
+    var showAddPlannedDialog by remember { mutableStateOf(false) }
+    var accountToEdit by remember { mutableStateOf<Account?>(null) }
+    var accountToDelete by remember { mutableStateOf<Account?>(null) }
+    var plannedToEdit by remember { mutableStateOf<PlannedTransaction?>(null) }
+    var viewedAccountForDetails by remember { mutableStateOf<Account?>(null) }
 
     var showChatAssistant by remember { mutableStateOf(false) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
@@ -199,9 +228,9 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "fabScale"
     )
-    val totalAmount = expenses.sumOf { it.amount }
-    val existingCategories = remember(expenses) {
-        (expenses.map { it.category.trim() }.filter { it.isNotEmpty() } + listOf("Food", "Other")).distinct()
+    val totalAmount = activePeriodSpent
+    val existingCategories = remember(expenses, plannedTransactions) {
+        ((expenses.map { it.category.trim() } + plannedTransactions.map { it.category.trim() }).filter { it.isNotEmpty() } + listOf("Food", "Other")).distinct()
     }
 
     Box(
@@ -220,10 +249,150 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                 AddExpenseDialog(
                     initialCategory = addDialogPrefillCategory,
                     existingCategories = existingCategories,
+                    accounts = accounts,
                     onDismiss = { showAddDialog = false },
-                    onConfirm = { amt, desc, cat ->
-                        viewModel.addExpense(amt, desc, cat)
+                    onConfirm = { amt, desc, cat, type, accId, toAccId, tags ->
+                        viewModel.addExpense(amt, desc, cat, type, accId, toAccId, tags)
                         showAddDialog = false
+                    }
+                )
+            }
+
+            if (showAddAccountDialog) {
+                AddAccountDialog(
+                    onDismiss = { showAddAccountDialog = false },
+                    onConfirm = { name, bal, color, icon, include ->
+                        viewModel.addAccount(name, bal, color, icon, includeInBalance = include)
+                        showAddAccountDialog = false
+                    }
+                )
+            }
+
+            if (accountToEdit != null) {
+                AddAccountDialog(
+                    accountToEdit = accountToEdit,
+                    onDismiss = { accountToEdit = null },
+                    onConfirm = { name, bal, color, icon, include ->
+                        accountToEdit?.let {
+                            viewModel.updateAccount(it.copy(name = name, balance = bal, colorHex = color, icon = icon, includeInBalance = include))
+                        }
+                        accountToEdit = null
+                    },
+                    onDelete = {
+                        accountToDelete = accountToEdit
+                    }
+                )
+            }
+
+            if (accountToDelete != null) {
+                AlertDialog(
+                    onDismissRequest = { accountToDelete = null },
+                    title = { Text("Delete Account", color = TextPrimary, fontWeight = FontWeight.Bold) },
+                    text = { Text("Are you sure you want to delete the account '${accountToDelete?.name}'? This action cannot be undone.", color = TextPrimary) },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                accountToDelete?.let {
+                                    viewModel.deleteAccount(it)
+                                }
+                                accountToDelete = null
+                                accountToEdit = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA3B35))
+                        ) {
+                            Text("Delete", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { accountToDelete = null }) {
+                            Text("Cancel", color = TextSecondary)
+                        }
+                    },
+                    containerColor = ThemeBackground
+                )
+            }
+
+            val viewedAccount = viewedAccountForDetails
+            if (viewedAccount != null) {
+                AccountDetailsDialog(
+                    account = viewedAccount,
+                    allExpenses = expenses,
+                    onDismiss = { viewedAccountForDetails = null },
+                    onEditAccount = {
+                        accountToEdit = viewedAccount
+                        viewedAccountForDetails = null
+                    },
+                    onDeleteTransaction = { expenseId ->
+                        viewModel.deleteExpense(expenseId)
+                    }
+                )
+            }
+
+            if (showAllAccountsDialog) {
+                AllAccountsDialog(
+                    accounts = accounts,
+                    hideBalance = hideBalance,
+                    onDismiss = { showAllAccountsDialog = false },
+                    onAccountClick = { account ->
+                        viewedAccountForDetails = account
+                        showAllAccountsDialog = false
+                    },
+                    onAddAccountClick = {
+                        showAddAccountDialog = true
+                        showAllAccountsDialog = false
+                    }
+                )
+            }
+
+            if (showTransferDialog) {
+                TransferDialog(
+                    accounts = accounts,
+                    onDismiss = { showTransferDialog = false },
+                    onConfirm = { from, to, amt, desc ->
+                        viewModel.addExpense(amt, desc, "Transfer", "TRANSFER", from, to, "")
+                        showTransferDialog = false
+                    }
+                )
+            }
+
+            if (showAddPlannedDialog) {
+                AddPlannedTransactionDialog(
+                    accounts = accounts,
+                    existingCategories = existingCategories,
+                    onDismiss = { showAddPlannedDialog = false },
+                    onConfirm = { title, amt, cat, type, accId, start, intervalType, intervalN, oneTime, desc ->
+                        viewModel.addPlannedTransaction(title, amt, cat, type, accId, start, intervalType, intervalN, oneTime, desc)
+                        showAddPlannedDialog = false
+                    }
+                )
+            }
+
+            if (plannedToEdit != null) {
+                AddPlannedTransactionDialog(
+                    plannedToEdit = plannedToEdit,
+                    accounts = accounts,
+                    existingCategories = existingCategories,
+                    onDismiss = { plannedToEdit = null },
+                    onConfirm = { title, amt, cat, type, accId, start, intervalType, intervalN, oneTime, desc ->
+                        plannedToEdit?.let {
+                            viewModel.updatePlannedTransaction(it.copy(
+                                title = title,
+                                amount = amt,
+                                category = cat,
+                                type = type,
+                                accountId = accId,
+                                startDate = start,
+                                intervalType = intervalType,
+                                intervalN = intervalN,
+                                oneTime = oneTime,
+                                description = desc
+                            ))
+                        }
+                        plannedToEdit = null
+                    },
+                    onDelete = {
+                        plannedToEdit?.let { viewModel.deletePlannedTransaction(it) }
+                        plannedToEdit = null
                     }
                 )
             }
@@ -235,6 +404,200 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                         viewModel.addDebtDue(name, amt, desc, type, dueDate)
                         showAddDebtDueDialog = false
                     }
+                )
+            }
+
+            if (showEditBudgetDialog) {
+                var tempAmount by remember { mutableStateOf(budgetLimit.toString()) }
+                val budgetPeriodType by viewModel.budgetPeriodType.collectAsState()
+                val budgetCustomStartDate by viewModel.budgetCustomStartDate.collectAsState()
+                val budgetCustomEndDate by viewModel.budgetCustomEndDate.collectAsState()
+
+                AlertDialog(
+                    onDismissRequest = { showEditBudgetDialog = false },
+                    title = {
+                        Text(
+                            text = "Edit Budget & Cycle",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = tempAmount,
+                                onValueChange = { tempAmount = it },
+                                label = { Text("Budget Limit (৳)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = PrimaryAccent,
+                                    unfocusedBorderColor = CardSurface,
+                                    focusedContainerColor = ThemeBackground,
+                                    unfocusedContainerColor = ThemeBackground,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                )
+                            )
+
+                            Text(
+                                text = "Budget Period",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = TextPrimary
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    "monthly" to "Monthly",
+                                    "weekly" to "Weekly",
+                                    "custom" to "Custom"
+                                ).forEach { (typeKey, typeLabel) ->
+                                    val isSelected = budgetPeriodType == typeKey
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) PrimaryAccent else CardSurface)
+                                            .clickable {
+                                                if (typeKey == "custom" && budgetCustomStartDate == 0L) {
+                                                    val defaultStart = Calendar.getInstance().apply {
+                                                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                                                    }.timeInMillis
+                                                    val defaultEnd = Calendar.getInstance().apply {
+                                                        timeInMillis = defaultStart
+                                                        add(Calendar.DAY_OF_YEAR, 30)
+                                                        set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+                                                    }.timeInMillis
+                                                    viewModel.updateBudgetPeriod("custom", defaultStart, defaultEnd)
+                                                } else {
+                                                    viewModel.updateBudgetPeriod(typeKey, budgetCustomStartDate, budgetCustomEndDate)
+                                                }
+                                            }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = typeLabel,
+                                            color = if (isSelected) Color.White else TextSecondary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (budgetPeriodType == "custom") {
+                                val sdf = SimpleDateFormat("dd MMM, yyyy", Locale.US)
+                                val startLabel = if (budgetCustomStartDate > 0L) sdf.format(Date(budgetCustomStartDate)) else "Add Date"
+                                val endLabel = if (budgetCustomEndDate > 0L) sdf.format(Date(budgetCustomEndDate)) else "Add Date"
+
+                                val startCal = Calendar.getInstance().apply {
+                                    if (budgetCustomStartDate > 0L) timeInMillis = budgetCustomStartDate
+                                }
+                                val startDatePickerDialog = remember(budgetCustomStartDate) {
+                                    android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val selectedCal = Calendar.getInstance()
+                                            selectedCal.set(year, month, dayOfMonth, 0, 0, 0)
+                                            selectedCal.set(Calendar.MILLISECOND, 0)
+                                            val endVal = if (budgetCustomEndDate > selectedCal.timeInMillis) budgetCustomEndDate else selectedCal.timeInMillis + (24L * 60 * 60 * 1000 * 30)
+                                            viewModel.updateBudgetPeriod("custom", selectedCal.timeInMillis, endVal)
+                                        },
+                                        startCal.get(Calendar.YEAR),
+                                        startCal.get(Calendar.MONTH),
+                                        startCal.get(Calendar.DAY_OF_MONTH)
+                                    )
+                                }
+
+                                val endCal = Calendar.getInstance().apply {
+                                    if (budgetCustomEndDate > 0L) timeInMillis = budgetCustomEndDate
+                                }
+                                val endDatePickerDialog = remember(budgetCustomEndDate) {
+                                    android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val selectedCal = Calendar.getInstance()
+                                            selectedCal.set(year, month, dayOfMonth, 23, 59, 59)
+                                            selectedCal.set(Calendar.MILLISECOND, 999)
+                                            val startVal = if (budgetCustomStartDate > 0L && budgetCustomStartDate < selectedCal.timeInMillis) budgetCustomStartDate else selectedCal.timeInMillis - (24L * 60 * 60 * 1000 * 30)
+                                            viewModel.updateBudgetPeriod("custom", startVal, selectedCal.timeInMillis)
+                                        },
+                                        endCal.get(Calendar.YEAR),
+                                        endCal.get(Calendar.MONTH),
+                                        endCal.get(Calendar.DAY_OF_MONTH)
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(CardSurface)
+                                            .clickable { startDatePickerDialog.show() }
+                                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("START DATE", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold), color = TextSecondary)
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(startLabel, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (budgetCustomStartDate > 0L) TextPrimary else TextSecondary)
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(CardSurface)
+                                            .clickable { endDatePickerDialog.show() }
+                                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("END DATE", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold), color = TextSecondary)
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(endLabel, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (budgetCustomEndDate > 0L) TextPrimary else TextSecondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val amount = tempAmount.toDoubleOrNull()
+                                if (amount != null) {
+                                    viewModel.updateBudgetLimit(amount)
+                                    showEditBudgetDialog = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Save", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEditBudgetDialog = false }) {
+                            Text("Cancel", color = TextSecondary)
+                        }
+                    },
+                    containerColor = CardSurface,
+                    shape = RoundedCornerShape(24.dp)
                 )
             }
 
@@ -297,6 +660,18 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                 Text("Log Debt / Receivable", fontWeight = FontWeight.Bold)
                             }
 
+                            Button(
+                                onClick = {
+                                    showAddChoiceDialog = false
+                                    showTransferDialog = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Transfer Funds", fontWeight = FontWeight.Bold)
+                            }
+
                             TextButton(
                                 onClick = { showAddChoiceDialog = false },
                                 modifier = Modifier.fillMaxWidth()
@@ -332,32 +707,43 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                     onShowNotifications = {
                         viewModel.markNotificationsAsRead()
                         showNotificationsDialog = true
-                    }
+                    },
+                    onEditBudgetClick = {
+                        showEditBudgetDialog = true
+                    },
+                    accounts = accounts,
+                    plannedTransactions = plannedTransactions,
+                    onAddAccountClick = { showAddAccountDialog = true },
+                    onAccountClick = { viewedAccountForDetails = it },
+                    onTransferClick = { showTransferDialog = true },
+                    onViewAllAccountsClick = { showAllAccountsDialog = true },
+                    onAddPlannedClick = { showAddPlannedDialog = true },
+                    onPlannedClick = { plannedToEdit = it },
+                    onPayPlanned = { viewModel.executePlannedTransaction(it) },
+                    onSkipPlanned = { viewModel.skipPlannedTransaction(it) }
                 )
                 "analytics" -> AnalyticsTab(
                     expenses = expenses,
                     debtsDues = debtsDues,
-                    budgetLimit = budgetLimit
+                    budgetLimit = budgetLimit,
+                    viewModel = viewModel
                 )
                 "history" -> {
+                    val hideIncome by viewModel.hideIncome.collectAsState()
                     HistoryTab(
+                        viewModel = viewModel,
                         expenses = expenses,
                         debtsDues = debtsDues,
                         activeHistorySection = activeHistorySection,
                         onSectionChange = { activeHistorySection = it },
                         onDeleteExpense = { viewModel.deleteExpense(it) },
-                        onImportExpenses = { importedList, callback ->
-                            viewModel.importExpenses(importedList, callback)
-                        },
-                        onRequestStoragePermission = { action ->
-                            requestStoragePermission(action)
-                        },
-                        onSettleDebtDue = { item, logAsExp ->
-                            viewModel.settleDebtDue(item, logAsExp)
+                        onSettleDebtDue = { item, paidAmt, logAsExp ->
+                            viewModel.settleDebtDuePartial(item, paidAmt, logAsExp)
                         },
                         onDeleteDebtDue = { id ->
                             viewModel.deleteDebtDue(id)
-                        }
+                        },
+                        hideIncome = hideIncome
                     )
                 }
                 "profile" -> ProfileTab(
@@ -373,7 +759,12 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                     budgetLimit = budgetLimit,
                     biometricsEnabled = biometricsEnabled,
                     themeSelection = themeSelection,
-                    activity = activity
+                    activity = activity,
+                    expenses = expenses,
+                    debtsDues = debtsDues,
+                    onRequestStoragePermission = { action ->
+                        requestStoragePermission(action)
+                    }
                 )
             }
         }
@@ -616,22 +1007,25 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                         }
 
 
-                        val totalDaysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-                        val currentDay = cal.get(Calendar.DAY_OF_MONTH)
-                        val monthStart = (cal.clone() as Calendar).apply {
-                            set(Calendar.DAY_OF_MONTH, 1)
-                            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                        }.timeInMillis
-                        val thisMonthSpent = expenses.filter { it.date >= monthStart }.sumOf { it.amount }
-                        val dailyRate = if (currentDay > 0) thisMonthSpent / currentDay else 0.0
-                        val projected = dailyRate * totalDaysInMonth
-                        val predictedSavings = budgetLimit - projected
+                        val projection = BudgetPeriodHelper.getPeriodProjection(
+                            expenses = expenses,
+                            budgetLimit = budgetLimit,
+                            periodType = budgetPeriodType,
+                            customStart = budgetCustomStartDate,
+                            customEnd = budgetCustomEndDate
+                        )
+                        val projected = projection.projected
+                        val predictedSavings = projection.predictedSavings
+                        val periodLabel = when (budgetPeriodType) {
+                            "weekly" -> "this week"
+                            "custom" -> "this period"
+                            else -> "this month"
+                        }
 
                         if (predictedSavings >= 0) {
                             trends.add(NotificationItem(
                                 title = "Savings Forecast: +৳${String.format(Locale.US, "%,.0f", predictedSavings)}",
-                                text = "At current pace, you'll save ৳${String.format(Locale.US, "%,.0f", predictedSavings)} this month.",
+                                text = "At current pace, you'll save ৳${String.format(Locale.US, "%,.0f", predictedSavings)} $periodLabel.",
                                 icon = Icons.Rounded.TrendingDown,
                                 colorType = "primary",
                                 severity = 0
@@ -639,7 +1033,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                         } else {
                             trends.add(NotificationItem(
                                 title = "Over-Budget Warning",
-                                text = "Projected to exceed budget by ৳${String.format(Locale.US, "%,.0f", -predictedSavings)}. Reduce daily spending.",
+                                text = "Projected to exceed budget by ৳${String.format(Locale.US, "%,.0f", -predictedSavings)} $periodLabel. Reduce daily spending.",
                                 icon = Icons.Rounded.TrendingUp,
                                 colorType = "accent",
                                 severity = 2
@@ -790,15 +1184,31 @@ fun HomeTab(
     hasUnreadNotifications: Boolean,
     onAddExpenseClick: (category: String) -> Unit,
     onNavigate: (tab: String) -> Unit,
-    onShowNotifications: () -> Unit
+    onShowNotifications: () -> Unit,
+    onEditBudgetClick: () -> Unit,
+    accounts: List<Account> = emptyList(),
+    plannedTransactions: List<PlannedTransaction> = emptyList(),
+    onAddAccountClick: () -> Unit = {},
+    onAccountClick: (Account) -> Unit = {},
+    onTransferClick: () -> Unit = {},
+    onViewAllAccountsClick: () -> Unit = {},
+    onAddPlannedClick: () -> Unit = {},
+    onPlannedClick: (PlannedTransaction) -> Unit = {},
+    onPayPlanned: (PlannedTransaction) -> Unit = {},
+    onSkipPlanned: (PlannedTransaction) -> Unit = {}
 ) {
     val context = LocalContext.current
     val debtsDues by viewModel.debtsDues.collectAsState()
+    val budgetPeriodType by viewModel.budgetPeriodType.collectAsState()
+    val budgetCustomStartDate by viewModel.budgetCustomStartDate.collectAsState()
+    val budgetCustomEndDate by viewModel.budgetCustomEndDate.collectAsState()
+    val hideBalance by viewModel.hideBalance.collectAsState()
+    val hideIncome by viewModel.hideIncome.collectAsState()
     var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
     var selectedFilter by remember { mutableStateOf("All") }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
-    val displayExpenses = remember(expenses, selectedFilter) {
+    val displayExpenses = remember(expenses, selectedFilter, hideIncome) {
         val todayStart = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -822,11 +1232,12 @@ fun HomeTab(
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
+        val baseList = if (hideIncome) expenses.filter { it.type != "INCOME" } else expenses
         val filtered = when (selectedFilter) {
-            "Today" -> expenses.filter { it.date >= todayStart }
-            "This Week" -> expenses.filter { it.date >= weekStart }
-            "This Month" -> expenses.filter { it.date >= monthStart }
-            else -> expenses
+            "Today" -> baseList.filter { it.date >= todayStart }
+            "This Week" -> baseList.filter { it.date >= weekStart }
+            "This Month" -> baseList.filter { it.date >= monthStart }
+            else -> baseList
         }
         filtered.take(4)
     }
@@ -892,7 +1303,10 @@ fun HomeTab(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.Start) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.Start
+                ) {
                     Text(
                         text = "WELCOME BACK",
                         style = MaterialTheme.typography.labelSmall.copy(
@@ -908,18 +1322,75 @@ fun HomeTab(
                             fontWeight = FontWeight.Black,
                             color = TextPrimary,
                             letterSpacing = (-0.5).sp
-                        )
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.width(16.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Month/Period Pill at Top Right
+                    Surface(
+                        onClick = onEditBudgetClick,
+                        shape = RoundedCornerShape(20.dp),
+                        color = CardSurface,
+                        modifier = Modifier.wrapContentSize()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CalendarMonth,
+                                contentDescription = null,
+                                tint = PrimaryAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            
+                            val sdf = SimpleDateFormat("dd MMM", Locale.US)
+                            val rangeLabel = when (budgetPeriodType) {
+                                "weekly" -> {
+                                    val start = BudgetPeriodHelper.getPeriodRange("weekly", 0, 0).first
+                                    val end = BudgetPeriodHelper.getPeriodRange("weekly", 0, 0).second
+                                    "${sdf.format(Date(start))} - ${sdf.format(Date(end))}"
+                                }
+                                "custom" -> {
+                                    if (budgetCustomStartDate > 0L && budgetCustomEndDate > 0L) {
+                                        "${sdf.format(Date(budgetCustomStartDate))} - ${sdf.format(Date(budgetCustomEndDate))}"
+                                    } else {
+                                        "Select Custom Dates"
+                                    }
+                                }
+                                else -> {
+                                    val sdfMonth = SimpleDateFormat("MMM yyyy", Locale.US)
+                                    sdfMonth.format(Date())
+                                }
+                            }
+                            
+                            Text(
+                                text = rangeLabel,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "Edit Budget",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
 
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
                             .background(CardSurface)
                             .clickable { onNavigate("profile") },
@@ -937,11 +1408,10 @@ fun HomeTab(
                                 imageVector = Icons.Rounded.Settings,
                                 contentDescription = "Settings",
                                 tint = TextPrimary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
-
 
                     Box(
                         contentAlignment = Alignment.Center
@@ -952,7 +1422,7 @@ fun HomeTab(
                                     scaleX = scale
                                     scaleY = scale
                                 }
-                                .size(44.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
                                 .background(CardSurface)
                                 .clickable(
@@ -966,19 +1436,17 @@ fun HomeTab(
                                 contentDescription = "Notifications",
                                 tint = if (hasUnreadNotifications) PrimaryAccent else TextPrimary,
                                 modifier = Modifier
-                                    .size(22.dp)
+                                    .size(20.dp)
                                     .graphicsLayer { rotationZ = bellRotation }
                             )
                         }
 
-
                         if (hasUnreadNotifications) {
-
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .offset(x = (-1).dp, y = 1.dp)
-                                    .size(10.dp)
+                                    .size(8.dp)
                                     .graphicsLayer {
                                         scaleX = pulseScale
                                         scaleY = pulseScale
@@ -991,8 +1459,8 @@ fun HomeTab(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .offset(x = (-1).dp, y = 1.dp)
-                                    .size(10.dp)
-                                    .border(1.5.dp, ThemeBackground, CircleShape)
+                                    .size(8.dp)
+                                    .border(1.dp, ThemeBackground, CircleShape)
                                     .background(PrimaryAccent, CircleShape)
                             )
                         }
@@ -1007,7 +1475,7 @@ fun HomeTab(
                     .padding(bottom = 24.dp)
             ) {
                 val remainingBudget = (budgetLimit - totalAmount).coerceAtLeast(0.0)
-                val remainingText = String.format(Locale.US, "%,.2f", remainingBudget)
+                val remainingText = if (hideBalance) "••••" else String.format(Locale.US, "%,.2f", remainingBudget)
                 Text(
                     text = "REMAINING BALANCE",
                     style = MaterialTheme.typography.labelSmall.copy(
@@ -1027,19 +1495,46 @@ fun HomeTab(
                     )
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                val spentText = String.format(Locale.US, "%,.2f", totalAmount)
+                val spentText = if (hideBalance) "••••" else String.format(Locale.US, "%,.2f", totalAmount)
+                val periodLabel = when (budgetPeriodType) {
+                    "weekly" -> "weekly"
+                    "custom" -> {
+                        val sdf = SimpleDateFormat("dd MMM, yyyy", Locale.US)
+                        "target period (${sdf.format(Date(budgetCustomStartDate))} - ${sdf.format(Date(budgetCustomEndDate))})"
+                    }
+                    else -> "monthly"
+                }
                 Text(
                     text = buildAnnotatedString {
                         withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = TextPrimary)) {
                             append("৳$spentText")
                         }
-                        append(" spent of monthly target")
+                        append(" spent of $periodLabel target")
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary
                 )
             }
 
+            AccountsSection(
+                accounts = accounts,
+                hideBalance = hideBalance,
+                onAddAccountClick = onAddAccountClick,
+                onAccountClick = onAccountClick,
+                onTransferClick = onTransferClick,
+                onViewAllClick = onViewAllAccountsClick,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            PlannedPaymentsSection(
+                plannedTransactions = plannedTransactions,
+                accounts = accounts,
+                onPayClick = onPayPlanned,
+                onSkipClick = onSkipPlanned,
+                onAddPlannedClick = onAddPlannedClick,
+                onPlannedClick = onPlannedClick,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
 
             Card(
                 shape = RoundedCornerShape(28.dp),
@@ -1335,8 +1830,8 @@ fun HomeTab(
                     )
                 }
 
-                val hubCategories = remember(expenses) {
-                    (listOf("Food", "Other") + expenses.map { it.category }).distinct()
+                val hubCategories = remember(expenses, plannedTransactions) {
+                    (listOf("Food", "Other") + expenses.map { it.category } + plannedTransactions.map { it.category }).distinct()
                 }
 
                 LazyRow(
@@ -1477,6 +1972,7 @@ fun HomeTab(
             items(displayExpenses, key = { it.id }) { expense ->
                 ExpenseItem(
                     expense = expense,
+                    accounts = accounts,
                     onDelete = { expenseToDelete = expense }
                 )
             }
@@ -1518,10 +2014,15 @@ fun HomeTab(
 fun AnalyticsTab(
     expenses: List<Expense>,
     debtsDues: List<DebtDue>,
-    budgetLimit: Double
+    budgetLimit: Double,
+    viewModel: MainViewModel
 ) {
     var selectedStatsTab by remember { mutableStateOf("spending") }
     var isWeekSelected by remember { mutableStateOf(true) }
+
+    val budgetPeriodType by viewModel.budgetPeriodType.collectAsState()
+    val budgetCustomStartDate by viewModel.budgetCustomStartDate.collectAsState()
+    val budgetCustomEndDate by viewModel.budgetCustomEndDate.collectAsState()
 
     val last4WeeksData = remember(expenses) {
         val cal = Calendar.getInstance()
@@ -1598,22 +2099,14 @@ fun AnalyticsTab(
     }
 
 
-    val monthlyProjection = remember(expenses) {
-        val cal = Calendar.getInstance()
-        val totalDaysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-        val currentDayOfMonth = cal.get(Calendar.DAY_OF_MONTH)
-
-        val monthStart = (cal.clone() as Calendar).apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-
-        val thisMonthSpent = expenses.filter { it.date >= monthStart }.sumOf { it.amount }
-        val dailyRate = if (currentDayOfMonth > 0) thisMonthSpent / currentDayOfMonth else 0.0
-        val projected = dailyRate * totalDaysInMonth
-        val predictedSavings = budgetLimit - projected
-
-        Triple(thisMonthSpent, projected, predictedSavings)
+    val periodProjection = remember(expenses, budgetLimit, budgetPeriodType, budgetCustomStartDate, budgetCustomEndDate) {
+        BudgetPeriodHelper.getPeriodProjection(
+            expenses = expenses,
+            budgetLimit = budgetLimit,
+            periodType = budgetPeriodType,
+            customStart = budgetCustomStartDate,
+            customEnd = budgetCustomEndDate
+        )
     }
 
 
@@ -2120,16 +2613,14 @@ fun AnalyticsTab(
 
 
                 item {
-                    val (thisMonthSpent, projected, predictedSavings) = monthlyProjection
+                    val activeSpent = periodProjection.spent
+                    val projected = periodProjection.projected
+                    val predictedSavings = periodProjection.predictedSavings
                     val isOnTrack = predictedSavings >= 0
-
-                    val cal = java.util.Calendar.getInstance()
-                    val currentDayOfMonth = cal.get(java.util.Calendar.DAY_OF_MONTH)
-                    val dailyRate = if (currentDayOfMonth > 0) thisMonthSpent / currentDayOfMonth else 0.0
-
+                    val dailyRate = periodProjection.dailyRate
 
                     val totalScale = maxOf(budgetLimit, projected)
-                    val actualFraction = if (totalScale > 0) (thisMonthSpent / totalScale).toFloat().coerceIn(0f, 1f) else 0f
+                    val actualFraction = if (totalScale > 0) (activeSpent / totalScale).toFloat().coerceIn(0f, 1f) else 0f
                     val projectedFraction = if (totalScale > 0) (projected / totalScale).toFloat().coerceIn(0f, 1f) else 0f
                     val budgetFraction = if (totalScale > 0) (budgetLimit / totalScale).toFloat().coerceIn(0f, 1f) else 0f
 
@@ -2158,13 +2649,18 @@ fun AnalyticsTab(
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
+                                    val periodTitle = when (budgetPeriodType) {
+                                        "weekly" -> "Weekly"
+                                        "custom" -> "Period"
+                                        else -> "Monthly"
+                                    }
                                     Text(
-                                        text = "Monthly Spending Forecast", 
+                                        text = "$periodTitle Spending Forecast", 
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), 
                                         color = TextPrimary
                                     )
                                     Text(
-                                        text = "Est. month-end spend based on your daily speed",
+                                        text = "Est. period-end spend based on your daily speed",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary
                                     )
@@ -2186,7 +2682,7 @@ fun AnalyticsTab(
                                         color = TextSecondary
                                     )
                                     Text(
-                                        text = "৳${String.format(Locale.US, "%,.0f", thisMonthSpent)}",
+                                        text = "৳${String.format(Locale.US, "%,.0f", activeSpent)}",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                         color = if (isOnTrack) TextPrimary else PrimaryAccent
                                     )
@@ -2262,8 +2758,13 @@ fun AnalyticsTab(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary
                                     )
+                                    val budgetLimitLabel = when (budgetPeriodType) {
+                                        "weekly" -> "Weekly"
+                                        "custom" -> "Period"
+                                        else -> "Monthly"
+                                    }
                                     Text(
-                                        text = "Monthly Budget Limit: ৳${String.format(Locale.US, "%,.0f", budgetLimit)}",
+                                        text = "$budgetLimitLabel Budget Limit: ৳${String.format(Locale.US, "%,.0f", budgetLimit)}",
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                         color = TextSecondary
                                     )
@@ -2362,7 +2863,11 @@ fun AnalyticsTab(
                                         color = if (isOnTrack) TextPrimary else PrimaryAccent
                                     )
                                     Text(
-                                        text = "Est. Month End",
+                                        text = when (budgetPeriodType) {
+                                            "weekly" -> "Est. Week End"
+                                            "custom" -> "Est. Period End"
+                                            else -> "Est. Month End"
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary
                                     )
@@ -3080,124 +3585,52 @@ private fun InsightRow(
 
 @Composable
 fun HistoryTab(
+    viewModel: MainViewModel,
     expenses: List<Expense>,
     debtsDues: List<DebtDue>,
     activeHistorySection: String,
     onSectionChange: (String) -> Unit,
     onDeleteExpense: (Int) -> Unit,
-    onImportExpenses: (List<Expense>, (Boolean, Int) -> Unit) -> Unit,
-    onRequestStoragePermission: (() -> Unit) -> Unit,
-    onSettleDebtDue: (DebtDue, Boolean) -> Unit,
-    onDeleteDebtDue: (Int) -> Unit
+    onSettleDebtDue: (DebtDue, Double, Boolean) -> Unit,
+    onDeleteDebtDue: (Int) -> Unit,
+    hideIncome: Boolean
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    var showImportGuide by remember { mutableStateOf(false) }
-    var isImporting by remember { mutableStateOf(false) }
     var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
-    var showExportFormatDialog by remember { mutableStateOf(false) }
 
     var activeSection by remember(activeHistorySection) { mutableStateOf(activeHistorySection) }
+
+    val accounts by viewModel.accounts.collectAsState()
+    val plannedTransactions by viewModel.plannedTransactions.collectAsState()
+    var showAddPlannedDialog by remember { mutableStateOf(false) }
+    var plannedToEdit by remember { mutableStateOf<PlannedTransaction?>(null) }
 
     val handleSectionChange = { sec: String ->
         activeSection = sec
         onSectionChange(sec)
     }
 
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            isImporting = true
-            coroutineScope.launch(Dispatchers.IO) {
-                try {
-                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                        val importedList = ExcelHelper.importExpenses(inputStream)
-                        withContext(Dispatchers.Main) {
-                            onImportExpenses(importedList) { success, count ->
-                                isImporting = false
-                                if (success) {
-                                    Toast.makeText(context, "Successfully imported $count records!", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "Failed to save imported expenses.", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
-                    }
-                } catch (e: Throwable) {
-                    withContext(Dispatchers.Main) {
-                        isImporting = false
-                        Toast.makeText(context, "Import failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
-    }
 
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/vnd.ms-excel")
-    ) { uri: Uri? ->
-        if (uri != null) {
-            coroutineScope.launch(Dispatchers.IO) {
-                try {
-                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                        ExcelHelper.exportAllData(outputStream, expenses, debtsDues)
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                } catch (e: Throwable) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Export failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
-    }
-
-    val pdfExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/pdf")
-    ) { uri: Uri? ->
-        if (uri != null) {
-            coroutineScope.launch(Dispatchers.IO) {
-                try {
-                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                        PdfHelper.exportAllData(outputStream, expenses, debtsDues)
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                } catch (e: Throwable) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Export failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
-    }
-
-    if (showImportGuide) {
-        ExcelImportGuideDialog(
-            onDismiss = { showImportGuide = false },
-            onChooseFile = {
-                onRequestStoragePermission {
-                    importLauncher.launch("*/*")
-                }
-            }
-        )
-    }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     var sortBy by remember { mutableStateOf("date_desc") }
     var dateFilter by remember { mutableStateOf("all") }
     var amountFilter by remember { mutableStateOf("all") }
+    var historyCustomStartDate by remember { mutableStateOf(0L) }
+    var historyCustomEndDate by remember { mutableStateOf(0L) }
+    var groupByOption by remember { mutableStateOf("none") }
 
-    val categories = remember(expenses) {
-        listOf("All") + expenses.map { it.category }.distinct()
+    val baseExpenses = remember(expenses, hideIncome) {
+        if (hideIncome) expenses.filter { it.type != "INCOME" } else expenses
     }
 
-    val filteredExpenses = remember(searchQuery, selectedCategory, dateFilter, amountFilter, sortBy, expenses) {
+    val categories = remember(baseExpenses) {
+        listOf("All") + baseExpenses.map { it.category }.distinct()
+    }
+
+    val filteredExpenses = remember(searchQuery, selectedCategory, dateFilter, amountFilter, sortBy, baseExpenses, historyCustomStartDate, historyCustomEndDate) {
 
         val todayStart = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
@@ -3222,7 +3655,7 @@ fun HistoryTab(
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
-        expenses.filter { expense ->
+        baseExpenses.filter { expense ->
             val matchesSearch = expense.description.contains(searchQuery, ignoreCase = true) ||
                     expense.category.contains(searchQuery, ignoreCase = true)
             val matchesCategory = selectedCategory == "All" || expense.category == selectedCategory
@@ -3230,6 +3663,11 @@ fun HistoryTab(
                 "today" -> expense.date >= todayStart
                 "week" -> expense.date >= weekStart
                 "month" -> expense.date >= monthStart
+                "custom" -> {
+                    val start = if (historyCustomStartDate > 0L) historyCustomStartDate else 0L
+                    val end = if (historyCustomEndDate > 0L) historyCustomEndDate else Long.MAX_VALUE
+                    expense.date in start..end
+                }
                 else -> true
             }
             val matchesAmount = when (amountFilter) {
@@ -3249,52 +3687,84 @@ fun HistoryTab(
         }
     }
 
+    val groupedExpenses = remember(filteredExpenses, groupByOption) {
+        if (groupByOption == "none") {
+            emptyMap<String, List<Expense>>()
+        } else {
+            val displaySdf = if (groupByOption == "weekly") {
+                SimpleDateFormat("'Week of' MMM dd, yyyy", Locale.US)
+            } else if (groupByOption == "yearly") {
+                SimpleDateFormat("yyyy", Locale.US)
+            } else {
+                SimpleDateFormat("MMMM yyyy", Locale.US)
+            }
+
+            filteredExpenses.groupBy { expense ->
+                if (groupByOption == "weekly") {
+                    val cal = Calendar.getInstance().apply {
+                        timeInMillis = expense.date
+                        set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                    }
+                    displaySdf.format(cal.time)
+                } else {
+                    displaySdf.format(Date(expense.date))
+                }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
     ) {
-        Text(
-            text = "Ledger & Logs",
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-0.5).sp
-            ),
-            color = TextPrimary,
-            modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
-        )
-        Text(
-            text = "Review your transactions, debts, and receivables.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
+        // Redesigned Top Header: Title + Icon Buttons
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Ledger & Logs",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = (-0.5).sp
+                    ),
+                    color = TextPrimary
+                )
+            }
+            
+        }
 
         // Sub-Navigation Tabs
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp)
-                .background(CardSurface, RoundedCornerShape(16.dp))
-                .padding(4.dp),
+                .padding(vertical = 8.dp)
+                .background(CardSurface, RoundedCornerShape(12.dp))
+                .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val sections = listOf(
                 "transactions" to "Transactions",
-                "debts" to "Debts (I Owe)",
-                "dues" to "Receivables"
+                "debts" to "Debts",
+                "dues" to "Receivables",
+                "planned" to "Planned"
             )
             sections.forEach { (secKey, secLabel) ->
                 val isSelected = activeSection == secKey
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(
                             if (isSelected) PrimaryAccent else Color.Transparent
                         )
                         .clickable { handleSectionChange(secKey) }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -3308,85 +3778,26 @@ fun HistoryTab(
         }
 
         if (activeSection == "transactions") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-
-                Button(
-                    onClick = { showImportGuide = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryAccent,
-                        contentColor = Color.White
-                    ),
-                    contentPadding = PaddingValues(vertical = 10.dp)
-                ) {
-                    if (isImporting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.UploadFile,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import Logs", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
-                    }
-                }
-
-
-                Button(
-                    onClick = {
-                        if (expenses.isEmpty()) {
-                            Toast.makeText(context, "No transactions to export", Toast.LENGTH_SHORT).show()
-                        } else {
-                            showExportFormatDialog = true
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = CardSurface,
-                        contentColor = TextPrimary
-                    ),
-                    contentPadding = PaddingValues(vertical = 10.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = PrimaryAccent
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export Logs", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
-                    }
-                }
-            }
+            // Search Bar with Trailing Filter Icon
+            var showFilterPanel by remember { mutableStateOf(false) }
+            val isFilterActive = dateFilter != "all" || amountFilter != "all" || sortBy != "date_desc" || selectedCategory != "All" || groupByOption != "none"
 
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 placeholder = { Text("Search logs...") },
                 leadingIcon = { Icon(Icons.Rounded.Search, "Search", tint = TextSecondary) },
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                shape = RoundedCornerShape(16.dp),
+                trailingIcon = {
+                    IconButton(onClick = { showFilterPanel = !showFilterPanel }) {
+                        Icon(
+                            imageVector = Icons.Rounded.FilterList,
+                            contentDescription = "Toggle Filters",
+                            tint = if (isFilterActive) PrimaryAccent else TextPrimary
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                shape = RoundedCornerShape(12.dp),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryAccent,
@@ -3398,271 +3809,360 @@ fun HistoryTab(
                 )
             )
 
-
-            Row(
+            // Collapsible Filter Panel
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .animateContentSize()
             ) {
-
-                var sortMenuExpanded by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.weight(1f)) {
-                    OutlinedButton(
-                        onClick = { sortMenuExpanded = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextPrimary
-                        ),
-                        border = BorderStroke(1.dp, CardSurface)
-                    ) {
-                        val label = when (sortBy) {
-                            "date_asc" -> "Oldest"
-                            "amount_desc" -> "Price: High"
-                            "amount_asc" -> "Price: Low"
-                            else -> "Newest"
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Sort,
-                                    contentDescription = "Sort By",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = PrimaryAccent
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = "Dropdown",
-                                modifier = Modifier.size(16.dp),
-                                tint = TextPrimary
-                            )
-                        }
-                    }
-                    
-                    DropdownMenu(
-                        expanded = sortMenuExpanded,
-                        onDismissRequest = { sortMenuExpanded = false },
-                        modifier = Modifier.background(CardSurface)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Newest First", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                sortBy = "date_desc"
-                                sortMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Oldest First", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                sortBy = "date_asc"
-                                sortMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Amount: High to Low", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                sortBy = "amount_desc"
-                                sortMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Amount: Low to High", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                sortBy = "amount_asc"
-                                sortMenuExpanded = false
-                            }
-                        )
-                    }
-                }
-
-
-                var dateMenuExpanded by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.weight(1f)) {
-                    OutlinedButton(
-                        onClick = { dateMenuExpanded = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextPrimary
-                        ),
-                        border = BorderStroke(1.dp, CardSurface)
-                    ) {
-                        val label = when (dateFilter) {
-                            "today" -> "Today"
-                            "week" -> "This Week"
-                            "month" -> "This Month"
-                            else -> "All Time"
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Rounded.DateRange,
-                                    contentDescription = "Date Range",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = PrimaryAccent
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = "Dropdown",
-                                modifier = Modifier.size(16.dp),
-                                tint = TextPrimary
-                            )
-                        }
-                    }
-                    
-                    DropdownMenu(
-                        expanded = dateMenuExpanded,
-                        onDismissRequest = { dateMenuExpanded = false },
-                        modifier = Modifier.background(CardSurface)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("All Time", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                dateFilter = "all"
-                                dateMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Today", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                dateFilter = "today"
-                                dateMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("This Week", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                dateFilter = "week"
-                                dateMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("This Month", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                dateFilter = "month"
-                                dateMenuExpanded = false
-                            }
-                        )
-                    }
-                }
-
-
-                var amountMenuExpanded by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.weight(1f)) {
-                    OutlinedButton(
-                        onClick = { amountMenuExpanded = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextPrimary
-                        ),
-                        border = BorderStroke(1.dp, CardSurface)
-                    ) {
-                        val label = when (amountFilter) {
-                            "low" -> "< ৳500"
-                            "medium" -> "৳500-2k"
-                            "high" -> "> ৳2k"
-                            else -> "All Prices"
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Payments,
-                                    contentDescription = "Amount Limit",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = PrimaryAccent
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = "Dropdown",
-                                modifier = Modifier.size(16.dp),
-                                tint = TextPrimary
-                            )
-                        }
-                    }
-                    
-                    DropdownMenu(
-                        expanded = amountMenuExpanded,
-                        onDismissRequest = { amountMenuExpanded = false },
-                        modifier = Modifier.background(CardSurface)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("All Prices", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                amountFilter = "all"
-                                amountMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Under ৳500", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                amountFilter = "low"
-                                amountMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("৳500 - ৳2,000", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                amountFilter = "medium"
-                                amountMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Over ৳2,000", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                amountFilter = "high"
-                                amountMenuExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(categories) { cat ->
-                    val isSelected = selectedCategory == cat
-                    Box(
+                if (showFilterPanel) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
                         modifier = Modifier
-                            .background(
-                                if (isSelected) PrimaryAccent else CardSurface,
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { selectedCategory = cat }
-                            .padding(horizontal = 18.dp, vertical = 8.dp)
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
                     ) {
-                        Text(
-                            text = cat,
-                            color = if (isSelected) Color.White else TextPrimary,
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                        )
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Filters & Grouping", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
+                                Text(
+                                    text = "Clear All",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryAccent,
+                                    modifier = Modifier.clickable {
+                                        sortBy = "date_desc"
+                                        dateFilter = "all"
+                                        amountFilter = "all"
+                                        selectedCategory = "All"
+                                        groupByOption = "none"
+                                        historyCustomStartDate = 0L
+                                        historyCustomEndDate = 0L
+                                    }
+                                )
+                            }
+
+                            // 1. Sort & Filters Dropdown Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                // Sort By Dropdown
+                                var sortMenuExpanded by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    OutlinedButton(
+                                        onClick = { sortMenuExpanded = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                                        border = BorderStroke(1.dp, ThemeBackground)
+                                    ) {
+                                        val label = when (sortBy) {
+                                            "date_asc" -> "Oldest"
+                                            "amount_desc" -> "Price: High"
+                                            "amount_asc" -> "Price: Low"
+                                            else -> "Newest"
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Rounded.Sort, null, modifier = Modifier.size(14.dp), tint = PrimaryAccent)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Icon(Icons.Rounded.ArrowDropDown, null, modifier = Modifier.size(14.dp), tint = TextSecondary)
+                                        }
+                                    }
+                                    DropdownMenu(
+                                        expanded = sortMenuExpanded,
+                                        onDismissRequest = { sortMenuExpanded = false },
+                                        modifier = Modifier.background(ThemeBackground)
+                                    ) {
+                                        listOf(
+                                            "date_desc" to "Newest First",
+                                            "date_asc" to "Oldest First",
+                                            "amount_desc" to "Price: High to Low",
+                                            "amount_asc" to "Price: Low to High"
+                                        ).forEach { (valKey, valLabel) ->
+                                            DropdownMenuItem(
+                                                text = { Text(valLabel, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                                                onClick = {
+                                                    sortBy = valKey
+                                                    sortMenuExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Date Filter Dropdown
+                                var dateMenuExpanded by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    OutlinedButton(
+                                        onClick = { dateMenuExpanded = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                                        border = BorderStroke(1.dp, ThemeBackground)
+                                    ) {
+                                        val label = when (dateFilter) {
+                                            "today" -> "Today"
+                                            "week" -> "This Week"
+                                            "month" -> "This Month"
+                                            "custom" -> "Custom"
+                                            else -> "All Time"
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Rounded.DateRange, null, modifier = Modifier.size(14.dp), tint = PrimaryAccent)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Icon(Icons.Rounded.ArrowDropDown, null, modifier = Modifier.size(14.dp), tint = TextSecondary)
+                                        }
+                                    }
+                                    DropdownMenu(
+                                        expanded = dateMenuExpanded,
+                                        onDismissRequest = { dateMenuExpanded = false },
+                                        modifier = Modifier.background(ThemeBackground)
+                                    ) {
+                                        listOf(
+                                            "all" to "All Time",
+                                            "today" to "Today",
+                                            "week" to "This Week",
+                                            "month" to "This Month",
+                                            "custom" to "Custom Range"
+                                        ).forEach { (valKey, valLabel) ->
+                                            DropdownMenuItem(
+                                                text = { Text(valLabel, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                                                onClick = {
+                                                    dateFilter = valKey
+                                                    dateMenuExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Amount Filter Dropdown
+                                var amountMenuExpanded by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    OutlinedButton(
+                                        onClick = { amountMenuExpanded = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                                        border = BorderStroke(1.dp, ThemeBackground)
+                                    ) {
+                                        val label = when (amountFilter) {
+                                            "low" -> "< ৳500"
+                                            "medium" -> "৳500-2k"
+                                            "high" -> "> ৳2k"
+                                            else -> "All Prices"
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Rounded.Payments, null, modifier = Modifier.size(14.dp), tint = PrimaryAccent)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Icon(Icons.Rounded.ArrowDropDown, null, modifier = Modifier.size(14.dp), tint = TextSecondary)
+                                        }
+                                    }
+                                    DropdownMenu(
+                                        expanded = amountMenuExpanded,
+                                        onDismissRequest = { amountMenuExpanded = false },
+                                        modifier = Modifier.background(ThemeBackground)
+                                    ) {
+                                        listOf(
+                                            "all" to "All Prices",
+                                            "low" to "Under ৳500",
+                                            "medium" to "৳500 - ৳2,000",
+                                            "high" to "Over ৳2,000"
+                                        ).forEach { (valKey, valLabel) ->
+                                            DropdownMenuItem(
+                                                text = { Text(valLabel, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                                                onClick = {
+                                                    amountFilter = valKey
+                                                    amountMenuExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 2. Custom Date Range Pickers (if dateFilter == "custom")
+                            if (dateFilter == "custom") {
+                                val sdf = SimpleDateFormat("dd MMM, yyyy", Locale.US)
+                                val startLabel = if (historyCustomStartDate > 0L) sdf.format(Date(historyCustomStartDate)) else "Add Date"
+                                val endLabel = if (historyCustomEndDate > 0L) sdf.format(Date(historyCustomEndDate)) else "Add Date"
+
+                                val startCal = Calendar.getInstance().apply {
+                                    if (historyCustomStartDate > 0L) timeInMillis = historyCustomStartDate
+                                }
+                                val startDatePickerDialog = remember(historyCustomStartDate) {
+                                    android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val selectedCal = Calendar.getInstance()
+                                            selectedCal.set(year, month, dayOfMonth, 0, 0, 0)
+                                            selectedCal.set(Calendar.MILLISECOND, 0)
+                                            val endVal = if (historyCustomEndDate > selectedCal.timeInMillis) historyCustomEndDate else 0L
+                                            historyCustomStartDate = selectedCal.timeInMillis
+                                            historyCustomEndDate = endVal
+                                        },
+                                        startCal.get(Calendar.YEAR),
+                                        startCal.get(Calendar.MONTH),
+                                        startCal.get(Calendar.DAY_OF_MONTH)
+                                    )
+                                }
+
+                                val endCal = Calendar.getInstance().apply {
+                                    if (historyCustomEndDate > 0L) timeInMillis = historyCustomEndDate
+                                }
+                                val endDatePickerDialog = remember(historyCustomEndDate) {
+                                    android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val selectedCal = Calendar.getInstance()
+                                            selectedCal.set(year, month, dayOfMonth, 23, 59, 59)
+                                            selectedCal.set(Calendar.MILLISECOND, 999)
+                                            val startVal = if (historyCustomStartDate > 0L && historyCustomStartDate < selectedCal.timeInMillis) historyCustomStartDate else 0L
+                                            historyCustomStartDate = startVal
+                                            historyCustomEndDate = selectedCal.timeInMillis
+                                        },
+                                        endCal.get(Calendar.YEAR),
+                                        endCal.get(Calendar.MONTH),
+                                        endCal.get(Calendar.DAY_OF_MONTH)
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(ThemeBackground)
+                                            .clickable { startDatePickerDialog.show() }
+                                            .padding(vertical = 8.dp, horizontal = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("START DATE", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold), color = TextSecondary)
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(startLabel, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (historyCustomStartDate > 0L) TextPrimary else TextSecondary)
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(ThemeBackground)
+                                            .clickable { endDatePickerDialog.show() }
+                                            .padding(vertical = 8.dp, horizontal = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("END DATE", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold), color = TextSecondary)
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(endLabel, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (historyCustomEndDate > 0L) TextPrimary else TextSecondary)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 3. Group By Selection
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Group:",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(
+                                        "none" to "None",
+                                        "weekly" to "Weekly",
+                                        "monthly" to "Monthly",
+                                        "yearly" to "Yearly"
+                                    ).forEach { (optKey, optLabel) ->
+                                        item {
+                                            val isSelected = groupByOption == optKey
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(if (isSelected) PrimaryAccent else ThemeBackground)
+                                                    .clickable { groupByOption = optKey }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                            ) {
+                                                Text(
+                                                    text = optLabel,
+                                                    color = if (isSelected) Color.White else TextPrimary,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 4. Category Filter Chips
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                items(categories) { cat ->
+                                    val isSelected = selectedCategory == cat
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) PrimaryAccent else ThemeBackground)
+                                            .clickable { selectedCategory = cat }
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = cat,
+                                            color = if (isSelected) Color.White else TextPrimary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -3688,11 +4188,59 @@ fun HistoryTab(
                         }
                     }
                 } else {
-                    items(filteredExpenses, key = { it.id }) { expense ->
-                        ExpenseItem(
-                            expense = expense,
-                            onDelete = { expenseToDelete = expense }
-                        )
+                    if (groupByOption == "none") {
+                        items(filteredExpenses, key = { it.id }) { expense ->
+                            ExpenseItem(
+                                expense = expense,
+                                accounts = accounts,
+                                onDelete = { expenseToDelete = expense }
+                            )
+                        }
+                    } else {
+                        for (entry in groupedExpenses.entries) {
+                            val groupLabel = entry.key
+                            val groupList = entry.value
+                            val netSubtotal = groupList.sumOf { exp ->
+                                if (exp.type == "INCOME") exp.amount else -exp.amount 
+                            }
+                            val formattedSubtotal = String.format(Locale.US, "%,.2f", Math.abs(netSubtotal))
+                            val netPrefix = if (netSubtotal >= 0) "+" else "-"
+                            val netColor = if (netSubtotal >= 0) Color(0xFF4CAF50) else Color(0xFFEA3B35)
+
+                            item(key = groupLabel) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 16.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = groupLabel.uppercase(),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 1.sp
+                                        ),
+                                        color = PrimaryAccent
+                                    )
+                                    Text(
+                                        text = "Net: $netPrefix৳$formattedSubtotal",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = netColor
+                                    )
+                                }
+                            }
+
+                            items(groupList, key = { it.id }) { expense ->
+                                ExpenseItem(
+                                    expense = expense,
+                                    accounts = accounts,
+                                    onDelete = { expenseToDelete = expense }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -3703,13 +4251,74 @@ fun HistoryTab(
                 onSettleDebtDue = onSettleDebtDue,
                 onDeleteDebtDue = onDeleteDebtDue
             )
-        } else {
+        } else if (activeSection == "dues") {
             DebtsSection(
                 type = "DUE",
                 debtsDues = debtsDues,
                 onSettleDebtDue = onSettleDebtDue,
                 onDeleteDebtDue = onDeleteDebtDue
             )
+        } else if (activeSection == "planned") {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 80.dp, top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Scheduled Cycles",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        )
+                        Button(
+                            onClick = { showAddPlannedDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(Icons.Rounded.Add, "Add", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add Cycle", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                if (plannedTransactions.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No planned cycles scheduled yet.", color = TextSecondary)
+                        }
+                    }
+                } else {
+                    items(plannedTransactions) { planned ->
+                        val now = System.currentTimeMillis()
+                        val isOverdue = planned.nextDueDate < now && planned.isActive
+                        val accountName = accounts.find { it.id == planned.accountId }?.name ?: "Unassigned"
+                        
+                        PlannedTransactionItem(
+                            planned = planned,
+                            accountName = accountName,
+                            isOverdue = isOverdue,
+                            onPay = { viewModel.executePlannedTransaction(planned) },
+                            onSkip = { viewModel.skipPlannedTransaction(planned) },
+                            onClick = { plannedToEdit = planned }
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -3742,51 +4351,51 @@ fun HistoryTab(
         )
     }
 
-    if (showExportFormatDialog) {
-        AlertDialog(
-            onDismissRequest = { showExportFormatDialog = false },
-            title = { Text("Export Records", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Select your preferred format for exporting your transactions and ledger:", color = TextSecondary)
-                    
-                    Button(
-                        onClick = {
-                            showExportFormatDialog = false
-                            onRequestStoragePermission {
-                                pdfExportLauncher.launch("expenses_and_debts_export.pdf")
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White)
-                    ) {
-                        Text("PDF Document (.pdf)", fontWeight = FontWeight.Bold)
-                    }
-                    
-                    Button(
-                        onClick = {
-                            showExportFormatDialog = false
-                            onRequestStoragePermission {
-                                exportLauncher.launch("expenses_and_debts_export.xls")
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CardSurface, contentColor = TextPrimary)
-                    ) {
-                        Text("Excel Spreadsheet (.xls)", fontWeight = FontWeight.Bold)
-                    }
+    if (showAddPlannedDialog) {
+        val existingCategories = remember(expenses, plannedTransactions) {
+            (expenses.map { it.category } + plannedTransactions.map { it.category }).distinct()
+        }
+        AddPlannedTransactionDialog(
+            accounts = accounts,
+            existingCategories = existingCategories,
+            onDismiss = { showAddPlannedDialog = false },
+            onConfirm = { title, amt, cat, type, accId, start, intervalType, intervalN, oneTime, desc ->
+                viewModel.addPlannedTransaction(title, amt, cat, type, accId, start, intervalType, intervalN, oneTime, desc)
+                showAddPlannedDialog = false
+            }
+        )
+    }
+
+    if (plannedToEdit != null) {
+        val existingCategories = remember(expenses, plannedTransactions) {
+            (expenses.map { it.category } + plannedTransactions.map { it.category }).distinct()
+        }
+        AddPlannedTransactionDialog(
+            plannedToEdit = plannedToEdit,
+            accounts = accounts,
+            existingCategories = existingCategories,
+            onDismiss = { plannedToEdit = null },
+            onConfirm = { title, amt, cat, type, accId, start, intervalType, intervalN, oneTime, desc ->
+                plannedToEdit?.let {
+                    viewModel.updatePlannedTransaction(it.copy(
+                        title = title,
+                        amount = amt,
+                        category = cat,
+                        type = type,
+                        accountId = accId,
+                        startDate = start,
+                        intervalType = intervalType,
+                        intervalN = intervalN,
+                        oneTime = oneTime,
+                        description = desc
+                    ))
                 }
+                plannedToEdit = null
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showExportFormatDialog = false }) {
-                    Text("Cancel", color = TextSecondary, fontWeight = FontWeight.SemiBold)
-                }
-            },
-            containerColor = ThemeBackground,
-            shape = RoundedCornerShape(24.dp)
+            onDelete = {
+                plannedToEdit?.let { viewModel.deletePlannedTransaction(it) }
+                plannedToEdit = null
+            }
         )
     }
 }
@@ -4061,13 +4670,99 @@ fun ProfileTab(
     budgetLimit: Double,
     biometricsEnabled: Boolean,
     themeSelection: String,
-    activity: FragmentActivity
+    activity: FragmentActivity,
+    expenses: List<Expense>,
+    debtsDues: List<DebtDue>,
+    onRequestStoragePermission: (() -> Unit) -> Unit
 ) {
     val context = LocalContext.current
+    val budgetPeriodType by viewModel.budgetPeriodType.collectAsState()
+    val budgetCustomStartDate by viewModel.budgetCustomStartDate.collectAsState()
+    val budgetCustomEndDate by viewModel.budgetCustomEndDate.collectAsState()
+    val hideBalance by viewModel.hideBalance.collectAsState()
+    val hideIncome by viewModel.hideIncome.collectAsState()
+    
+    val coroutineScope = rememberCoroutineScope()
+    var isImporting by remember { mutableStateOf(false) }
+    var showImportGuide by remember { mutableStateOf(false) }
+    var showExportFormatDialog by remember { mutableStateOf(false) }
+    
     var inputBudget by remember { mutableStateOf(budgetLimit.toString()) }
     var showEditNameDialog by remember { mutableStateOf(false) }
     var editNameInput by remember(userName) { mutableStateOf(userName) }
     var showResetConfirmDialog by remember { mutableStateOf(false) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            isImporting = true
+            coroutineScope.launch(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        val importedList = ExcelHelper.importExpenses(inputStream)
+                        withContext(Dispatchers.Main) {
+                            viewModel.importExpenses(importedList) { success, count ->
+                                isImporting = false
+                                if (success) {
+                                    Toast.makeText(context, "Successfully imported $count records!", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Failed to save imported expenses.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Throwable) {
+                    withContext(Dispatchers.Main) {
+                        isImporting = false
+                        Toast.makeText(context, "Import failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/vnd.ms-excel")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                        ExcelHelper.exportAllData(outputStream, expenses, debtsDues)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Throwable) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Export failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
+    val pdfExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                        PdfHelper.exportAllData(outputStream, expenses, debtsDues)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Throwable) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Export failed: ${e.javaClass.simpleName} - ${e.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
 
     if (showEditNameDialog) {
         AlertDialog(
@@ -4244,7 +4939,7 @@ fun ProfileTab(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        text = "Monthly Savings Target",
+                        text = "Savings & Budget Target",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = TextPrimary,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -4272,6 +4967,148 @@ fun ProfileTab(
                             unfocusedTextColor = TextPrimary
                         )
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(
+                        text = "Budget Cycle Period",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "monthly" to "Monthly",
+                            "weekly" to "Weekly",
+                            "custom" to "Custom"
+                        ).forEach { (typeKey, typeLabel) ->
+                            val isSelected = budgetPeriodType == typeKey
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) PrimaryAccent else ThemeBackground)
+                                    .clickable {
+                                        if (typeKey == "custom" && budgetCustomStartDate == 0L) {
+                                            val defaultStart = Calendar.getInstance().apply {
+                                                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                                            }.timeInMillis
+                                            val defaultEnd = Calendar.getInstance().apply {
+                                                timeInMillis = defaultStart
+                                                add(Calendar.DAY_OF_YEAR, 30)
+                                                set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+                                            }.timeInMillis
+                                            viewModel.updateBudgetPeriod("custom", defaultStart, defaultEnd)
+                                        } else {
+                                            viewModel.updateBudgetPeriod(typeKey, budgetCustomStartDate, budgetCustomEndDate)
+                                        }
+                                    }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = typeLabel,
+                                    color = if (isSelected) Color.White else TextSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+
+                    if (budgetPeriodType == "custom") {
+                        val sdf = SimpleDateFormat("dd MMM, yyyy", Locale.US)
+                        val startLabel = if (budgetCustomStartDate > 0L) sdf.format(Date(budgetCustomStartDate)) else "Add Date"
+                        val endLabel = if (budgetCustomEndDate > 0L) sdf.format(Date(budgetCustomEndDate)) else "Add Date"
+
+                        val startCal = Calendar.getInstance().apply {
+                            if (budgetCustomStartDate > 0L) timeInMillis = budgetCustomStartDate
+                        }
+                        val startDatePickerDialog = remember(budgetCustomStartDate) {
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    val selectedCal = Calendar.getInstance()
+                                    selectedCal.set(year, month, dayOfMonth, 0, 0, 0)
+                                    selectedCal.set(Calendar.MILLISECOND, 0)
+                                    val endVal = if (budgetCustomEndDate > selectedCal.timeInMillis) budgetCustomEndDate else selectedCal.timeInMillis + (24L * 60 * 60 * 1000 * 30)
+                                    viewModel.updateBudgetPeriod("custom", selectedCal.timeInMillis, endVal)
+                                },
+                                startCal.get(Calendar.YEAR),
+                                startCal.get(Calendar.MONTH),
+                                startCal.get(Calendar.DAY_OF_MONTH)
+                            )
+                        }
+
+                        val endCal = Calendar.getInstance().apply {
+                            if (budgetCustomEndDate > 0L) timeInMillis = budgetCustomEndDate
+                        }
+                        val endDatePickerDialog = remember(budgetCustomEndDate) {
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    val selectedCal = Calendar.getInstance()
+                                    selectedCal.set(year, month, dayOfMonth, 23, 59, 59)
+                                    selectedCal.set(Calendar.MILLISECOND, 999)
+                                    val startVal = if (budgetCustomStartDate > 0L && budgetCustomStartDate < selectedCal.timeInMillis) budgetCustomStartDate else selectedCal.timeInMillis - (24L * 60 * 60 * 1000 * 30)
+                                    viewModel.updateBudgetPeriod("custom", startVal, selectedCal.timeInMillis)
+                                },
+                                endCal.get(Calendar.YEAR),
+                                endCal.get(Calendar.MONTH),
+                                endCal.get(Calendar.DAY_OF_MONTH)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Custom Date Range",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = TextPrimary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(ThemeBackground)
+                                    .border(1.dp, CardSurface, RoundedCornerShape(12.dp))
+                                    .clickable { startDatePickerDialog.show() }
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("START DATE", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = TextSecondary)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(startLabel, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (budgetCustomStartDate > 0L) TextPrimary else TextSecondary)
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(ThemeBackground)
+                                    .border(1.dp, CardSurface, RoundedCornerShape(12.dp))
+                                    .clickable { endDatePickerDialog.show() }
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("END DATE", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = TextSecondary)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(endLabel, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = if (budgetCustomEndDate > 0L) TextPrimary else TextSecondary)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -4284,7 +5121,104 @@ fun ProfileTab(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        text = "App Security",
+                        text = "Backup & Export",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showImportGuide = true }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.UploadFile,
+                            contentDescription = "Import",
+                            tint = PrimaryAccent,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Import Logs",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "Import transactions from an Excel file",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
+                        }
+                        if (isImporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = PrimaryAccent,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = ThemeBackground.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (expenses.isEmpty()) {
+                                    Toast.makeText(context, "No transactions to export", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showExportFormatDialog = true
+                                }
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Download,
+                            contentDescription = "Export",
+                            tint = PrimaryAccent,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Export Logs",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "Export your data to Excel or PDF format",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "App Security & Privacy",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = TextPrimary,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -4314,6 +5248,82 @@ fun ProfileTab(
                         Switch(
                             checked = biometricsEnabled,
                             onCheckedChange = { viewModel.updateBiometricsEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = PrimaryAccent,
+                                uncheckedThumbColor = TextSecondary,
+                                uncheckedTrackColor = ThemeBackground,
+                                uncheckedBorderColor = CardSurface
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = ThemeBackground.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.VisibilityOff, "Hide Balance", tint = PrimaryAccent, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Hide Balance",
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "Mask totals on Home page",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = hideBalance,
+                            onCheckedChange = { viewModel.updateHideBalance(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = PrimaryAccent,
+                                uncheckedThumbColor = TextSecondary,
+                                uncheckedTrackColor = ThemeBackground,
+                                uncheckedBorderColor = CardSurface
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = ThemeBackground.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.RemoveRedEye, "Hide Income", tint = PrimaryAccent, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Hide Income Logs",
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "Filter out all income from lists",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = hideIncome,
+                            onCheckedChange = { viewModel.updateHideIncome(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = PrimaryAccent,
@@ -4613,26 +5623,109 @@ fun ProfileTab(
             shape = RoundedCornerShape(24.dp)
         )
     }
+
+    if (showImportGuide) {
+        ExcelImportGuideDialog(
+            onDismiss = { showImportGuide = false },
+            onChooseFile = {
+                onRequestStoragePermission {
+                    importLauncher.launch("*/*")
+                }
+            }
+        )
+    }
+
+    if (showExportFormatDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportFormatDialog = false },
+            title = { Text("Export Records", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Select your preferred format for exporting your transactions and ledger:", color = TextSecondary)
+                    
+                    Button(
+                        onClick = {
+                            showExportFormatDialog = false
+                            onRequestStoragePermission {
+                                pdfExportLauncher.launch("expenses_and_debts_export.pdf")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White)
+                    ) {
+                        Text("PDF Document (.pdf)", fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Button(
+                        onClick = {
+                            showExportFormatDialog = false
+                            onRequestStoragePermission {
+                                exportLauncher.launch("expenses_and_debts_export.xls")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CardSurface, contentColor = TextPrimary)
+                    ) {
+                        Text("Excel Spreadsheet (.xls)", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportFormatDialog = false }) {
+                    Text("Cancel", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            containerColor = ThemeBackground,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
 }
 
 
 @Composable
-fun ExpenseItem(expense: Expense, onDelete: () -> Unit) {
+fun ExpenseItem(
+    expense: Expense,
+    accounts: List<Account> = emptyList(),
+    onDelete: () -> Unit
+) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy, h:mm a", Locale.US) }
     val dateStr = remember(expense.date) { dateFormat.format(Date(expense.date)) }
     val style = getCategoryStyle(expense.category)
 
+    val account = remember(expense.accountId, accounts) {
+        accounts.firstOrNull { it.id == expense.accountId }
+    }
+
+    val accountColor = remember(account) {
+        if (account != null) {
+            try {
+                Color(android.graphics.Color.parseColor(account.colorHex))
+            } catch (e: Exception) {
+                PrimaryAccent
+            }
+        } else {
+            PrimaryAccent
+        }
+    }
+
+    val tagsList = remember(expense.tags) {
+        expense.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 4.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
+                .padding(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -4640,8 +5733,8 @@ fun ExpenseItem(expense: Expense, onDelete: () -> Unit) {
             ) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(ThemeBackground),
                     contentAlignment = Alignment.Center
                 ) {
@@ -4649,37 +5742,45 @@ fun ExpenseItem(expense: Expense, onDelete: () -> Unit) {
                         imageVector = style.first,
                         contentDescription = expense.category,
                         tint = style.third,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = expense.description.ifEmpty { expense.category },
-                        style = MaterialTheme.typography.bodyLarge.copy(
+                        style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
-                        )
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "$dateStr • ${expense.category}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 
+                val isIncome = expense.type == "INCOME"
+                val amountColor = if (isIncome) Color(0xFF4CAF50) else Color(0xFFEA3B35)
+                val amountPrefix = if (isIncome) "+" else "-"
+                
                 Text(
-                    text = "৳${String.format(Locale.US, "%,.2f", expense.amount)}",
-                    style = MaterialTheme.typography.titleMedium.copy(
+                    text = "$amountPrefix৳${String.format(Locale.US, "%,.2f", expense.amount)}",
+                    style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.Black,
-                        color = TextPrimary
+                        color = amountColor
                     )
                 )
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 IconButton(
                     onClick = onDelete,
@@ -4689,8 +5790,50 @@ fun ExpenseItem(expense: Expense, onDelete: () -> Unit) {
                         imageVector = Icons.Rounded.Delete,
                         contentDescription = "Delete",
                         tint = PrimaryAccent,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
+                }
+            }
+
+            if (account != null || tagsList.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (account != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(accountColor.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = account.name,
+                                color = accountColor,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    tagsList.forEach { tag ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CardSurface.copy(alpha = 0.8f))
+                                .border(BorderStroke(0.5.dp, TextSecondary.copy(alpha = 0.3f)), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "#$tag",
+                                color = TextSecondary,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -4763,7 +5906,8 @@ fun getCategoryStyle(category: String): Triple<androidx.compose.ui.graphics.vect
         "entertainment", "games", "movies" -> Icons.Rounded.SportsEsports
         "medical", "health", "doctor" -> Icons.Rounded.MedicalServices
         "education", "school", "books" -> Icons.Rounded.School
-        "salary", "income" -> Icons.Rounded.Payments
+        "salary", "income", "freelance", "tuition" -> Icons.Rounded.Payments
+        "investment" -> Icons.Rounded.TrendingUp
         else -> {
             val hashCode = category.hashCode()
             val icons = listOf(
@@ -4779,11 +5923,10 @@ fun getCategoryStyle(category: String): Triple<androidx.compose.ui.graphics.vect
         }
     }
     
-
     val tints = listOf(PrimaryAccent, TextPrimary, TextSecondary)
-    val tint = tints[Math.abs(category.hashCode()) % tints.size]
+    val isIncomeCategory = cleanCategory in listOf("salary", "income", "freelance", "tuition", "investment", "gift", "debt received")
+    val tint = if (isIncomeCategory) Color(0xFF4CAF50) else tints[Math.abs(category.hashCode()) % tints.size]
     
-
     return Triple(icon, CardSurface, tint)
 }
 

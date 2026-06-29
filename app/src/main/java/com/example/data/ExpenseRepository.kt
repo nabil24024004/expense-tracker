@@ -9,4 +9,5 @@ class ExpenseRepository(private val expenseDao: ExpenseDao) {
     suspend fun update(expense: Expense) = expenseDao.updateExpense(expense)
     suspend fun delete(id: Int) = expenseDao.deleteExpenseById(id)
     suspend fun getUnsynced() = expenseDao.getUnsyncedExpenses()
+    suspend fun getAllExpensesSync() = expenseDao.getAllExpensesSync()
 }

@@ -9,6 +9,11 @@ import com.example.data.Expense
 import com.example.data.ExpenseRepository
 import com.example.data.DebtDue
 import com.example.data.DebtDueRepository
+import com.example.data.BudgetPeriodHelper
+import com.example.data.Account
+import com.example.data.AccountRepository
+import com.example.data.PlannedTransaction
+import com.example.data.PlannedTransactionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +25,8 @@ import kotlinx.coroutines.withContext
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: ExpenseRepository
     private val debtDueRepository: DebtDueRepository
+    private val accountRepository: AccountRepository
+    private val plannedTransactionRepository: PlannedTransactionRepository
     private val prefs = application.getSharedPreferences("expense_tracker_prefs", Context.MODE_PRIVATE)
     private val database: AppDatabase
 
@@ -29,17 +36,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val profileImageUri = MutableStateFlow(prefs.getString("profile_image_uri", null))
     val budgetLimit = MutableStateFlow(prefs.getFloat("budget_limit", 6000.0f).toDouble())
     val biometricsEnabled = MutableStateFlow(prefs.getBoolean("biometrics_enabled", false))
+    val hideBalance = MutableStateFlow(prefs.getBoolean("hide_balance", false))
+    val hideIncome = MutableStateFlow(prefs.getBoolean("hide_income", false))
     
     val themeSelection = MutableStateFlow(prefs.getString("theme_selection", "Light") ?: "Light")
     val notificationsLastViewedTime = MutableStateFlow(prefs.getLong("notifications_last_viewed", 0L))
+
+    val budgetPeriodType = MutableStateFlow(prefs.getString("budget_period_type", "monthly") ?: "monthly")
+    val budgetCustomStartDate = MutableStateFlow(prefs.getLong("budget_custom_start_date", 0L))
+    val budgetCustomEndDate = MutableStateFlow(prefs.getLong("budget_custom_end_date", 0L))
 
     init {
         database = AppDatabase.getDatabase(application)
         repository = ExpenseRepository(database.expenseDao())
         debtDueRepository = DebtDueRepository(database.debtDueDao())
+        accountRepository = AccountRepository(database.accountDao())
+        plannedTransactionRepository = PlannedTransactionRepository(database.plannedTransactionDao())
         
         if (!biometricsEnabled.value) {
             isAuthenticated.value = true
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            var cashAccount = accountRepository.getById(1)
+            if (cashAccount == null) {
+                val newCash = Account(
+                    id = 1,
+                    name = "Cash",
+                    balance = 0.0,
+                    colorHex = "#EA3B35",
+                    icon = "wallet",
+                    currency = "৳",
+                    includeInBalance = true,
+                    displayOrder = 0
+                )
+                accountRepository.insert(newCash)
+                cashAccount = accountRepository.getById(1)
+            }
+            if (cashAccount != null) {
+                val prefs = application.getSharedPreferences("expense_tracker_prefs", Context.MODE_PRIVATE)
+                val isSynced = prefs.getBoolean("cash_balance_synced_v3", false)
+                if (!isSynced) {
+                    val allExpenses = repository.getAllExpensesSync()
+                    val cashTxns = allExpenses.filter { it.accountId == 1 || it.accountId == null }
+                    val netBalance = cashTxns.sumOf { 
+                        if (it.type == "INCOME") it.amount else -it.amount
+                    }
+                    accountRepository.update(cashAccount.copy(balance = netBalance))
+                    prefs.edit().putBoolean("cash_balance_synced_v3", true).apply()
+                }
+            }
+
+            // Auto-deposit scheduled incomes
+            plannedTransactionRepository.activePlanned.collect { plannedList ->
+                val now = System.currentTimeMillis()
+                plannedList.forEach { planned ->
+                    if (planned.type == "INCOME" && planned.nextDueDate <= now) {
+                        executePlannedTransaction(planned)
+                    }
+                }
+            }
         }
     }
 
@@ -50,6 +106,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     val debtsDues: StateFlow<List<DebtDue>> = debtDueRepository.allDebtsDues.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val accounts: StateFlow<List<Account>> = accountRepository.allAccounts.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val plannedTransactions: StateFlow<List<PlannedTransaction>> = plannedTransactionRepository.allPlanned.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val activePlannedTransactions: StateFlow<List<PlannedTransaction>> = plannedTransactionRepository.activePlanned.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -90,9 +164,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         budgetLimit.value = limit
     }
 
+    fun updateBudgetPeriod(periodType: String, customStart: Long = 0L, customEnd: Long = 0L) {
+        prefs.edit().apply {
+            putString("budget_period_type", periodType)
+            putLong("budget_custom_start_date", customStart)
+            putLong("budget_custom_end_date", customEnd)
+            apply()
+        }
+        budgetPeriodType.value = periodType
+        budgetCustomStartDate.value = customStart
+        budgetCustomEndDate.value = customEnd
+    }
+
     fun updateBiometricsEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("biometrics_enabled", enabled).apply()
         biometricsEnabled.value = enabled
+    }
+
+    fun updateHideBalance(hide: Boolean) {
+        prefs.edit().putBoolean("hide_balance", hide).apply()
+        hideBalance.value = hide
+    }
+
+    fun updateHideIncome(hide: Boolean) {
+        prefs.edit().putBoolean("hide_income", hide).apply()
+        hideIncome.value = hide
     }
 
     fun updateTheme(themeName: String) {
@@ -114,40 +210,148 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         notificationsLastViewedTime.value = now
     }
 
-    fun addExpense(amount: Double, description: String, category: String) {
+    // Account CRUD
+    fun addAccount(name: String, startingBalance: Double, colorHex: String, icon: String, currency: String = "৳", includeInBalance: Boolean = true) {
+        viewModelScope.launch {
+            val maxOrder = accounts.value.maxOfOrNull { it.displayOrder } ?: 0
+            val newAccount = Account(
+                name = name,
+                balance = startingBalance,
+                colorHex = colorHex,
+                icon = icon,
+                currency = currency,
+                includeInBalance = includeInBalance,
+                displayOrder = maxOrder + 1
+            )
+            accountRepository.insert(newAccount)
+        }
+    }
+
+    fun updateAccount(account: Account) {
+        viewModelScope.launch {
+            accountRepository.update(account)
+        }
+    }
+
+    fun deleteAccount(account: Account) {
+        if (account.id == 1) return // Prevent deleting the default Cash account
+        viewModelScope.launch {
+            accountRepository.delete(account)
+        }
+    }
+
+    fun updateAccountsOrder(reorderedList: List<Account>) {
+        viewModelScope.launch {
+            reorderedList.forEachIndexed { index, account ->
+                accountRepository.update(account.copy(displayOrder = index))
+            }
+        }
+    }
+
+    // Expense & Transfer Logging
+    fun addExpense(
+        amount: Double,
+        description: String,
+        category: String,
+        type: String = "EXPENSE",
+        accountId: Int? = null,
+        toAccountId: Int? = null,
+        tags: String = ""
+    ) {
         viewModelScope.launch {
             val date = System.currentTimeMillis()
-            val newExpense = Expense(amount = amount, description = description, category = category, date = date)
+            val resolvedAccountId = accountId ?: accounts.value.firstOrNull()?.id ?: 1
+            val newExpense = Expense(
+                amount = amount,
+                description = description,
+                category = category,
+                date = date,
+                type = type,
+                accountId = resolvedAccountId,
+                toAccountId = toAccountId,
+                tags = tags
+            )
+            
+            val periodType = budgetPeriodType.value
+            val customStart = budgetCustomStartDate.value
+            val customEnd = budgetCustomEndDate.value
+            val range = BudgetPeriodHelper.getPeriodRange(periodType, customStart, customEnd)
             
             val currentExpenses = expenses.value
-            val oldTotal = currentExpenses.sumOf { it.amount }
-            val newTotal = oldTotal + amount
+            val oldPeriodTotal = currentExpenses.filter { it.type == "EXPENSE" && it.date in range.first..range.second }.sumOf { it.amount }
+            val newPeriodTotal = oldPeriodTotal + amount
             val limit = budgetLimit.value
-
+ 
             repository.insert(newExpense)
 
-            if (newTotal > limit && oldTotal <= limit) {
-                val formattedLimit = String.format(java.util.Locale.US, "%,.2f", limit)
-                val formattedNewTotal = String.format(java.util.Locale.US, "%,.2f", newTotal)
-                NotificationHelper.triggerLiveNotification(
-                    getApplication(),
-                    "Budget Overrun",
-                    "Alert: You have exceeded your budget limit of ৳$formattedLimit! Total spent is now ৳$formattedNewTotal."
-                )
-            } else if (newTotal >= limit * 0.8 && oldTotal < limit * 0.8 && newTotal <= limit) {
-                val formattedLimit = String.format(java.util.Locale.US, "%,.2f", limit)
-                val formattedNewTotal = String.format(java.util.Locale.US, "%,.2f", newTotal)
-                NotificationHelper.triggerLiveNotification(
-                    getApplication(),
-                    "High Spending Alert",
-                    "Warning: You have used over 80% of your budget limit (৳$formattedNewTotal of ৳$formattedLimit used)."
-                )
+            // Adjust account balance in database
+            if (type == "TRANSFER" && toAccountId != null) {
+                // Subtract from sender, add to receiver
+                accountRepository.getById(resolvedAccountId)?.let { fromAcc ->
+                    accountRepository.update(fromAcc.copy(balance = fromAcc.balance - amount))
+                }
+                accountRepository.getById(toAccountId)?.let { toAcc ->
+                    accountRepository.update(toAcc.copy(balance = toAcc.balance + amount))
+                }
+            } else if (type == "INCOME") {
+                // Add to account
+                accountRepository.getById(resolvedAccountId)?.let { acc ->
+                    accountRepository.update(acc.copy(balance = acc.balance + amount))
+                }
+            } else {
+                // EXPENSE
+                accountRepository.getById(resolvedAccountId)?.let { acc ->
+                    accountRepository.update(acc.copy(balance = acc.balance - amount))
+                }
+            }
+ 
+            if (type == "EXPENSE") {
+                if (newPeriodTotal > limit && oldPeriodTotal <= limit) {
+                    val formattedLimit = String.format(java.util.Locale.US, "%,.2f", limit)
+                    val formattedNewTotal = String.format(java.util.Locale.US, "%,.2f", newPeriodTotal)
+                    NotificationHelper.triggerLiveNotification(
+                        getApplication(),
+                        "Budget Overrun",
+                        "Alert: You have exceeded your $periodType budget limit of ৳$formattedLimit! Total spent is now ৳$formattedNewTotal."
+                    )
+                } else if (newPeriodTotal >= limit * 0.8 && oldPeriodTotal < limit * 0.8 && newPeriodTotal <= limit) {
+                    val formattedLimit = String.format(java.util.Locale.US, "%,.2f", limit)
+                    val formattedNewTotal = String.format(java.util.Locale.US, "%,.2f", newPeriodTotal)
+                    NotificationHelper.triggerLiveNotification(
+                        getApplication(),
+                        "High Spending Alert",
+                        "Warning: You have used over 80% of your $periodType budget limit (৳$formattedNewTotal of ৳$formattedLimit used)."
+                    )
+                }
             }
         }
     }
 
     fun deleteExpense(id: Int) {
         viewModelScope.launch {
+            // Retrieve expense to adjust back its amount
+            val expenseList = expenses.value
+            val exp = expenseList.find { it.id == id }
+            if (exp != null) {
+                val accId = exp.accountId ?: 1
+                if (exp.type == "TRANSFER" && exp.toAccountId != null) {
+                    accountRepository.getById(accId)?.let { fromAcc ->
+                        accountRepository.update(fromAcc.copy(balance = fromAcc.balance + exp.amount))
+                    }
+                    accountRepository.getById(exp.toAccountId)?.let { toAcc ->
+                        accountRepository.update(toAcc.copy(balance = toAcc.balance - exp.amount))
+                    }
+                } else if (exp.type == "INCOME") {
+                    accountRepository.getById(accId)?.let { acc ->
+                        accountRepository.update(acc.copy(balance = acc.balance - exp.amount))
+                    }
+                } else {
+                    // EXPENSE
+                    accountRepository.getById(accId)?.let { acc ->
+                        accountRepository.update(acc.copy(balance = acc.balance + exp.amount))
+                    }
+                }
+            }
             repository.delete(id)
         }
     }
@@ -157,7 +361,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 var importedCount = 0
                 expensesToImport.forEach { expense ->
+                    val resolvedAccountId = expense.accountId ?: 1
                     repository.insert(expense)
+                    // Update balance
+                    if (expense.type == "INCOME") {
+                        accountRepository.getById(resolvedAccountId)?.let { acc ->
+                            accountRepository.update(acc.copy(balance = acc.balance + expense.amount))
+                        }
+                    } else if (expense.type == "EXPENSE") {
+                        accountRepository.getById(resolvedAccountId)?.let { acc ->
+                            accountRepository.update(acc.copy(balance = acc.balance - expense.amount))
+                        }
+                    }
                     importedCount++
                 }
                 
@@ -168,16 +383,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         "Successfully imported $importedCount transaction logs."
                     )
                     
+                    val periodType = budgetPeriodType.value
+                    val customStart = budgetCustomStartDate.value
+                    val customEnd = budgetCustomEndDate.value
+                    val range = BudgetPeriodHelper.getPeriodRange(periodType, customStart, customEnd)
+                    
                     val currentExpenses = expenses.value
-                    val newTotal = currentExpenses.sumOf { it.amount }
+                    val newPeriodTotal = currentExpenses.filter { it.type == "EXPENSE" && it.date in range.first..range.second }.sumOf { it.amount }
                     val limit = budgetLimit.value
-                    if (newTotal > limit) {
+                    if (newPeriodTotal > limit) {
                         val formattedLimit = String.format(java.util.Locale.US, "%,.2f", limit)
-                        val formattedNewTotal = String.format(java.util.Locale.US, "%,.2f", newTotal)
+                        val formattedNewTotal = String.format(java.util.Locale.US, "%,.2f", newPeriodTotal)
                         NotificationHelper.triggerLiveNotification(
                             getApplication(),
                             "Budget Overrun",
-                            "Alert: You have exceeded your budget limit of ৳$formattedLimit! Total spent is now ৳$formattedNewTotal."
+                            "Alert: You have exceeded your $periodType budget limit of ৳$formattedLimit! Total spent is now ৳$formattedNewTotal."
                         )
                     }
                 }
@@ -188,6 +408,98 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Planned Transactions CRUD & Scheduling
+    fun addPlannedTransaction(
+        title: String,
+        amount: Double,
+        category: String,
+        type: String,
+        accountId: Int,
+        startDate: Long,
+        intervalType: String,
+        intervalN: Int,
+        oneTime: Boolean,
+        description: String = ""
+    ) {
+        viewModelScope.launch {
+            val pt = PlannedTransaction(
+                title = title,
+                amount = amount,
+                category = category,
+                type = type,
+                accountId = accountId,
+                startDate = startDate,
+                intervalType = intervalType,
+                intervalN = intervalN,
+                oneTime = oneTime,
+                nextDueDate = startDate,
+                isActive = true,
+                description = description
+            )
+            plannedTransactionRepository.insert(pt)
+        }
+    }
+
+    fun updatePlannedTransaction(planned: PlannedTransaction) {
+        viewModelScope.launch {
+            plannedTransactionRepository.update(planned)
+        }
+    }
+
+    fun deletePlannedTransaction(planned: PlannedTransaction) {
+        viewModelScope.launch {
+            plannedTransactionRepository.delete(planned)
+        }
+    }
+
+    fun executePlannedTransaction(planned: PlannedTransaction) {
+        viewModelScope.launch {
+            // Log as real transaction
+            addExpense(
+                amount = planned.amount,
+                description = planned.title,
+                category = planned.category,
+                type = planned.type,
+                accountId = planned.accountId,
+                tags = "planned"
+            )
+
+            // Advance due date
+            if (planned.oneTime) {
+                plannedTransactionRepository.update(planned.copy(isActive = false))
+            } else {
+                val nextDue = calculateNextDueDate(planned.nextDueDate, planned.intervalType, planned.intervalN)
+                plannedTransactionRepository.update(planned.copy(nextDueDate = nextDue))
+            }
+        }
+    }
+
+    fun skipPlannedTransaction(planned: PlannedTransaction) {
+        viewModelScope.launch {
+            if (planned.oneTime) {
+                plannedTransactionRepository.update(planned.copy(isActive = false))
+            } else {
+                val nextDue = calculateNextDueDate(planned.nextDueDate, planned.intervalType, planned.intervalN)
+                plannedTransactionRepository.update(planned.copy(nextDueDate = nextDue))
+            }
+        }
+    }
+
+    private fun calculateNextDueDate(currentNextDue: Long, intervalType: String, intervalN: Int): Long {
+        val cal = java.util.Calendar.getInstance().apply {
+            timeInMillis = currentNextDue
+        }
+        when (intervalType) {
+            "DAY" -> cal.add(java.util.Calendar.DAY_OF_YEAR, intervalN)
+            "WEEK" -> cal.add(java.util.Calendar.WEEK_OF_YEAR, intervalN)
+            "MONTH" -> cal.add(java.util.Calendar.MONTH, intervalN)
+            "YEAR" -> cal.add(java.util.Calendar.YEAR, intervalN)
+            else -> cal.add(java.util.Calendar.MONTH, intervalN)
+        }
+        return cal.timeInMillis
+    }
+
+    // Debts & Dues settlement
     fun addDebtDue(personName: String, amount: Double, description: String, type: String, dueDate: Long?) {
         viewModelScope.launch {
             val date = System.currentTimeMillis()
@@ -204,16 +516,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun settleDebtDue(debtDue: DebtDue, logAsExpense: Boolean) {
-        viewModelScope.launch {
-            val updated = debtDue.copy(isCleared = true)
-            debtDueRepository.update(updated)
+        settleDebtDuePartial(debtDue, debtDue.amount, logAsExpense)
+    }
 
-            if (logAsExpense && debtDue.type == "DEBT") {
-                addExpense(
-                    amount = debtDue.amount,
-                    description = "Repaid: ${debtDue.personName} (${debtDue.description})",
-                    category = "Debt Repayment"
-                )
+    fun settleDebtDuePartial(debtDue: DebtDue, paidAmount: Double, logAsTransaction: Boolean) {
+        viewModelScope.launch {
+            if (paidAmount >= debtDue.amount) {
+                val updated = debtDue.copy(isCleared = true)
+                debtDueRepository.update(updated)
+            } else {
+                val updated = debtDue.copy(amount = debtDue.amount - paidAmount)
+                debtDueRepository.update(updated)
+            }
+ 
+            if (logAsTransaction) {
+                val defaultAccId = accounts.value.firstOrNull()?.id ?: 1
+                if (debtDue.type == "DEBT") {
+                    addExpense(
+                        amount = paidAmount,
+                        description = "Repaid: ${debtDue.personName} (${debtDue.description})",
+                        category = "Debt Repayment",
+                        type = "EXPENSE",
+                        accountId = defaultAccId
+                    )
+                } else {
+                    addExpense(
+                        amount = paidAmount,
+                        description = "Collected from: ${debtDue.personName} (${debtDue.description})",
+                        category = "Debt Received",
+                        type = "INCOME",
+                        accountId = defaultAccId
+                    )
+                }
             }
         }
     }
@@ -238,7 +572,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             themeSelection.value = "Light"
             isAuthenticated.value = false
             notificationsLastViewedTime.value = 0L
+            budgetPeriodType.value = "monthly"
+            budgetCustomStartDate.value = 0L
+            budgetCustomEndDate.value = 0L
         }
     }
 }
-

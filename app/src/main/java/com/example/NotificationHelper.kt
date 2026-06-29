@@ -9,6 +9,7 @@ import java.util.Calendar
 object NotificationHelper {
     fun scheduleDailyReminders(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val now = System.currentTimeMillis()
         
         // 1. Morning Summary Alarm (8:30 AM)
         val intent1 = Intent(context, NotificationReceiver::class.java).apply {
@@ -22,22 +23,17 @@ object NotificationHelper {
         )
         
         val calendar1 = Calendar.getInstance().apply {
-            timeInMillis = System.currentTimeMillis()
+            timeInMillis = now
             set(Calendar.HOUR_OF_DAY, 8)
             set(Calendar.MINUTE, 30)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-            if (before(Calendar.getInstance())) {
+            if (timeInMillis <= now + 60 * 1000) {
                 add(Calendar.DAY_OF_YEAR, 1)
             }
         }
         
-        alarmManager.setRepeating(
-            AlarmManager.RTC_WAKEUP,
-            calendar1.timeInMillis,
-            AlarmManager.INTERVAL_DAY,
-            pendingIntent1
-        )
+        scheduleAlarm(alarmManager, calendar1.timeInMillis, pendingIntent1)
 
         // 2. Evening Summary Alarm (11:00 PM)
         val intent2 = Intent(context, NotificationReceiver::class.java).apply {
@@ -51,22 +47,49 @@ object NotificationHelper {
         )
         
         val calendar2 = Calendar.getInstance().apply {
-            timeInMillis = System.currentTimeMillis()
+            timeInMillis = now
             set(Calendar.HOUR_OF_DAY, 23)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-            if (before(Calendar.getInstance())) {
+            if (timeInMillis <= now + 60 * 1000) {
                 add(Calendar.DAY_OF_YEAR, 1)
             }
         }
         
-        alarmManager.setRepeating(
-            AlarmManager.RTC_WAKEUP,
-            calendar2.timeInMillis,
-            AlarmManager.INTERVAL_DAY,
-            pendingIntent2
-        )
+        scheduleAlarm(alarmManager, calendar2.timeInMillis, pendingIntent2)
+    }
+
+    private fun scheduleAlarm(alarmManager: AlarmManager, triggerAtMillis: Long, pendingIntent: PendingIntent) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                }
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            }
+        } else {
+            alarmManager.set(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        }
     }
 
     fun triggerLiveNotification(context: Context, title: String, message: String) {

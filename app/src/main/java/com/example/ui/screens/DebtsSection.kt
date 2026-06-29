@@ -21,6 +21,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,7 +36,7 @@ import java.util.*
 fun DebtsSection(
     type: String, // "DEBT" or "DUE"
     debtsDues: List<DebtDue>,
-    onSettleDebtDue: (DebtDue, logAsExpense: Boolean) -> Unit,
+    onSettleDebtDue: (DebtDue, paidAmount: Double, logAsTransaction: Boolean) -> Unit,
     onDeleteDebtDue: (Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -196,71 +198,259 @@ fun DebtsSection(
     // Confirmation Settle Dialog
     if (itemToSettle != null) {
         val target = itemToSettle!!
-        if (target.type == "DEBT") {
-            // Debt payback requires expense prompt
-            AlertDialog(
-                onDismissRequest = { itemToSettle = null },
-                title = { Text("Clear Debt", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                text = { Text("You are settling the debt of ৳${String.format(Locale.US, "%,.2f", target.amount)} paid to ${target.personName}. Would you like to log this repayment as an expense transaction as well?", color = TextPrimary) },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onSettleDebtDue(target, true)
-                            Toast.makeText(context, "Debt settled and logged as expense!", Toast.LENGTH_SHORT).show()
-                            itemToSettle = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Settle & Log Expense", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                },
-                dismissButton = {
-                    Row {
-                        TextButton(onClick = {
-                            onSettleDebtDue(target, false)
-                            Toast.makeText(context, "Debt settled without logging expense.", Toast.LENGTH_SHORT).show()
-                            itemToSettle = null
-                        }) {
-                            Text("Settle Only", color = PrimaryAccent, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = { itemToSettle = null }) {
-                            Text("Cancel", color = TextSecondary)
-                        }
-                    }
-                },
-                containerColor = ThemeBackground,
-                shape = RoundedCornerShape(24.dp)
-            )
-        } else {
-            // Due collection is cleared directly (user requested no auto expense)
-            AlertDialog(
-                onDismissRequest = { itemToSettle = null },
-                title = { Text("Clear Receivable", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                text = { Text("Are you sure you want to mark the receivable of ৳${String.format(Locale.US, "%,.2f", target.amount)} from ${target.personName} as collected / cleared?", color = TextPrimary) },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onSettleDebtDue(target, false)
-                            Toast.makeText(context, "Receivable marked as cleared!", Toast.LENGTH_SHORT).show()
-                            itemToSettle = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Mark Cleared", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { itemToSettle = null }) {
-                        Text("Cancel", color = TextSecondary)
-                    }
-                },
-                containerColor = ThemeBackground,
-                shape = RoundedCornerShape(24.dp)
-            )
+        val isDebt = target.type == "DEBT"
+        var paymentTab by remember { mutableStateOf("full") } // "full" or "partial"
+        var settleAmountText by remember { mutableStateOf("") }
+        var logAsTransaction by remember { mutableStateOf(true) }
+
+        // Set amount automatically when switching tabs
+        LaunchedEffect(paymentTab, target.amount) {
+            if (paymentTab == "full") {
+                settleAmountText = String.format(Locale.US, "%.2f", target.amount)
+            } else {
+                settleAmountText = ""
+            }
         }
+
+        val parsedAmount = settleAmountText.toDoubleOrNull() ?: 0.0
+        val isPartial = paymentTab == "partial" && parsedAmount > 0 && parsedAmount < target.amount
+        val isFull = paymentTab == "full" || parsedAmount >= target.amount
+
+        AlertDialog(
+            onDismissRequest = { itemToSettle = null },
+            title = {
+                Text(
+                    text = if (isDebt) "Settle Debt" else "Settle Receivable",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 1. User Profile summary with Avatar Badge
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CardSurface, RoundedCornerShape(16.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val firstLetter = target.personName.firstOrNull()?.toString()?.uppercase(Locale.US) ?: "?"
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(PrimaryAccent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = firstLetter,
+                                color = PrimaryAccent,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = target.personName,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = if (isDebt) "You owe them" else "They owe you",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "৳${String.format(Locale.US, "%,.2f", target.amount)}",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black),
+                                color = if (isDebt) Color(0xFFEA3B35) else Color(0xFF4CAF50)
+                            )
+                            Text(
+                                text = if (isDebt) "Total Owed" else "Total Due",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+
+                    // 2. Settlement Tabs (Full vs Partial)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CardSurface, RoundedCornerShape(12.dp))
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            "full" to "Full Settle",
+                            "partial" to "Partial Pay"
+                        ).forEach { (tabKey, tabLabel) ->
+                            val isSelected = paymentTab == tabKey
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) PrimaryAccent else Color.Transparent)
+                                    .clickable { paymentTab = tabKey }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = tabLabel,
+                                    color = if (isSelected) Color.White else TextSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // 3. Amount Field
+                    if (paymentTab == "partial") {
+                        OutlinedTextField(
+                            value = settleAmountText,
+                            onValueChange = { settleAmountText = it },
+                            label = { Text("Settlement Amount (৳)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PrimaryAccent,
+                                unfocusedBorderColor = CardSurface,
+                                focusedContainerColor = ThemeBackground,
+                                unfocusedContainerColor = ThemeBackground,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            )
+                        )
+                    } else {
+                        // Display full settle amount clearly
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(ThemeBackground, RoundedCornerShape(12.dp))
+                                .border(1.dp, CardSurface, RoundedCornerShape(12.dp))
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "SETTLEMENT AMOUNT",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                                    color = TextSecondary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "৳${String.format(Locale.US, "%,.2f", target.amount)}",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                                    color = TextPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    // 4. Logging Switch Card
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { logAsTransaction = !logAsTransaction }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isDebt) "Log repayment transaction" else "Log receipt transaction",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = if (isDebt) "Add an expense entry automatically" else "Add an income entry automatically",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            Switch(
+                                checked = logAsTransaction,
+                                onCheckedChange = { logAsTransaction = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = PrimaryAccent,
+                                    uncheckedThumbColor = TextSecondary,
+                                    uncheckedTrackColor = ThemeBackground,
+                                    uncheckedBorderColor = CardSurface
+                                )
+                            )
+                        }
+                    }
+
+                    // 5. Dynamic Info Banner
+                    val bannerText = when {
+                        isFull -> if (isDebt) "Pending debt will be marked as fully settled." else "Pending receivable will be marked as fully settled."
+                        isPartial && parsedAmount > 0.0 -> {
+                            val remaining = target.amount - parsedAmount
+                            "Partial payment recorded. Remaining ৳${String.format(Locale.US, "%,.2f", remaining)} will stay active."
+                        }
+                        else -> "Enter a valid payment amount."
+                    }
+                    val bannerBg = if (isFull) Color(0xFFE8F5E9) else if (isPartial && parsedAmount > 0.0) Color(0xFFFFECEB) else CardSurface
+                    val bannerTextCol = if (isFull) Color(0xFF2E7D32) else if (isPartial && parsedAmount > 0.0) Color(0xFFC62828) else TextSecondary
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(bannerBg)
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = bannerText,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = bannerTextCol,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amountToPay = if (paymentTab == "full") target.amount else parsedAmount
+                        if (amountToPay > 0.0 && amountToPay <= target.amount) {
+                            onSettleDebtDue(target, amountToPay, logAsTransaction)
+                            val msg = if (amountToPay < target.amount) "Partial settlement recorded!" else "Record fully settled!"
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            itemToSettle = null
+                        } else {
+                            Toast.makeText(context, "Please enter a valid amount", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryAccent, contentColor = Color.White),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Confirm", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToSettle = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = ThemeBackground,
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 
     // Confirmation Delete Dialog

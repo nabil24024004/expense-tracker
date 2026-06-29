@@ -34,6 +34,7 @@ object ExcelHelper {
         var categoryColIndex = -1
         var descriptionColIndex = -1
         var amountColIndex = -1
+        var typeColIndex = -1
 
         for (cell in headerRow) {
             val headerText = getCellValueAsString(cell).trim().lowercase(Locale.US)
@@ -42,6 +43,7 @@ object ExcelHelper {
                 "category" -> categoryColIndex = cell.columnIndex
                 "description" -> descriptionColIndex = cell.columnIndex
                 "amount" -> amountColIndex = cell.columnIndex
+                "type" -> typeColIndex = cell.columnIndex
             }
         }
 
@@ -80,6 +82,9 @@ object ExcelHelper {
 
             val category = getCellValueAsString(categoryCell).trim()
             val description = getCellValueAsString(descriptionCell).trim()
+            val typeCell = if (typeColIndex != -1) row.getCell(typeColIndex) else null
+            val rawType = getCellValueAsString(typeCell).trim().uppercase(Locale.US)
+            val type = if (rawType == "INCOME" || rawType == "EXPENSE") rawType else "EXPENSE"
 
             if (category.isEmpty() && description.isEmpty() && amount == 0.0) {
                 continue
@@ -93,7 +98,8 @@ object ExcelHelper {
                     amount = amount,
                     description = finalDescription,
                     category = finalCategory,
-                    date = dateMs
+                    date = dateMs,
+                    type = type
                 )
             )
         }
@@ -108,7 +114,7 @@ object ExcelHelper {
 
 
         val headerRow = sheet.createRow(0)
-        val headers = listOf("Date", "Category", "Description", "Amount")
+        val headers = listOf("Date", "Category", "Description", "Amount", "Type")
         for (i in headers.indices) {
             val cell = headerRow.createCell(i)
             cell.setCellValue(headers[i])
@@ -131,6 +137,7 @@ object ExcelHelper {
 
 
             row.createCell(3).setCellValue(expense.amount)
+            row.createCell(4).setCellValue(expense.type)
         }
 
 
@@ -138,6 +145,7 @@ object ExcelHelper {
         sheet.setColumnWidth(1, 15 * 256)
         sheet.setColumnWidth(2, 30 * 256)
         sheet.setColumnWidth(3, 15 * 256)
+        sheet.setColumnWidth(4, 15 * 256)
 
         workbook.write(outputStream)
         workbook.close()
@@ -150,7 +158,7 @@ object ExcelHelper {
         // Sheet 1: Expenses
         val sheet1 = workbook.createSheet("Expenses")
         val headerRow1 = sheet1.createRow(0)
-        val headers1 = listOf("Date", "Category", "Description", "Amount")
+        val headers1 = listOf("Date", "Category", "Description", "Amount", "Type")
         for (i in headers1.indices) {
             val cell = headerRow1.createCell(i)
             cell.setCellValue(headers1[i])
@@ -163,12 +171,14 @@ object ExcelHelper {
             row.createCell(1).setCellValue(expense.category)
             row.createCell(2).setCellValue(expense.description)
             row.createCell(3).setCellValue(expense.amount)
+            row.createCell(4).setCellValue(expense.type)
         }
 
         sheet1.setColumnWidth(0, 20 * 256)
         sheet1.setColumnWidth(1, 15 * 256)
         sheet1.setColumnWidth(2, 30 * 256)
         sheet1.setColumnWidth(3, 15 * 256)
+        sheet1.setColumnWidth(4, 15 * 256)
         // Sheet 2: Debts & Receivables
         val sheet2 = workbook.createSheet("Debts & Receivables")
         val headerRow2 = sheet2.createRow(0)
