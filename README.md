@@ -1,4 +1,4 @@
-# Expense Tracker (v5.0) 📱💰
+# Expense Tracker (v4.6) 📱💰
 
 [![Kotlin Version](https://img.shields.io/badge/Kotlin-1.9.0-purple.svg)](https://kotlinlang.org/)
 [![UI Framework](https://img.shields.io/badge/Compose-Jetpack-blue.svg)](https://developer.android.com/jetpack/compose)
@@ -22,19 +22,19 @@ A modern, offline-first personal finance and expense tracking Android applicatio
 
 ### 2. Multi-Account & Wallet System
 * **Custom Wallets**: Create and manage distinct accounts representing Cash, Bank Accounts, Credit Cards, or Savings Accounts.
-* **Personalized Cards**: Assign custom names, type icons, starting balances, and color hexes to match your physical cards.
+* **Personalized Cards**: Assign custom names, type icons, bank names, starting balances, and color hexes to match your physical cards.
 * **Inter-Account Transfers**: Record fund transfers between wallets (e.g., ATM withdrawals, credit card payments), automatically recalculating both account balances.
 * **Net Balance Exclusions**: Toggle accounts (like high-yield savings) to be excluded from your primary dashboard "Total Balance".
 
 ### 3. Smart Transaction Logging
 * **Math Calculator Keyboard**: Write equations directly in the amount field (e.g., `250 + 120 * 1.05`) with a live calculation preview before saving.
-* **Hashtag Multi-Tagging**: Add custom tags to transactions (e.g., `#vacation`, `#client-x`) separate from categories, facilitating cross-category searching.
 * **Transaction Types**: Label logs as **Expense** (reduces wallet balance) or **Income** (adds to wallet balance).
 
-### 4. Planned & Recurring Payments
+### 4. Planned Transactions & Recurring Expenses
 * **Subscription & Bill Scheduler**: Automate recurring cycles (Daily, Weekly, Monthly, Yearly) or schedule one-time future payments.
-* **Overdue Highlights**: Highlights upcoming or missed cycles on your dashboard in red.
-* **Pay / Skip Actions**: Tap **Pay** to automatically log the transaction to its wallet and schedule the next cycle, or tap **Skip** to advance the schedule without logging a transaction.
+* **Overdue Highlights**: Highlights upcoming or missed expenses on your dashboard in red.
+* **Auto-Deposit Income**: Scheduled income transactions (like salaries) are automatically deposited in the background on their due date, without requiring manual interaction.
+* **Pay / Skip Actions**: For scheduled expenses, tap **Pay** to manually log the transaction to its wallet and schedule the next cycle, or tap **Skip** to advance the schedule without logging a transaction.
 
 ### 5. Debts & Receivables
 * **Lending & Borrowing Ledger**: Track debts (what you owe) and dues (what others owe you) with person names and due dates.
@@ -60,10 +60,7 @@ Follow these best practices to get maximum utility and automation out of your pe
 Do not use the app as a single "Cash" ledger. Create separate wallets for your physical cash, payroll bank account, credit card, and savings. By tracking inter-account transfers (like credit card payments or cash withdrawals), your net worth calculations remain accurate without throwing off your category-based budgets.
 
 ### 2. Automate Constant Expenses with Scheduled Cycles
-Schedule your fixed bills, recurring subscriptions (Netflix, Spotify, gym), and salary dates under **Planned Payments**. Instead of manual entry, you will receive overdue indicators on your dashboard. Tapping **Pay** instantly logs them with the correct wallet, category, and amount, cutting down log times by 90%.
-
-### 3. Master Hashtag Tags for Events or Projects
-Use Categories for *what* the item is (e.g., Food, Transport) and Hashtags for *why* it happened (e.g., `#SummerTrip2026`, `#OfficeSetup`). Under the Ledger tab, search for the hashtag to see the exact cost of an event or project across multiple categories, giving you a distinct view of holiday or client-project expenses.
+Schedule your fixed bills, recurring subscriptions (Netflix, Spotify, gym), and salary dates under **Planned Transactions**. Instead of manual entry, you will receive overdue indicators for expenses on your dashboard. Tapping **Pay** instantly logs them with the correct wallet, category, and amount, cutting down log times by 90%. Scheduled incomes like salary will automatically deposit in the background without needing your attention.
 
 ### 4. Use the Amount Calculator for Shared Expenses
 When buying items in bulk or splitting bills, use the math evaluator inside the amount field (e.g., `4500 / 3` or `1200 + 450 + 900`). This eliminates the need to switch back and forth between a separate calculator app and the tracker.
