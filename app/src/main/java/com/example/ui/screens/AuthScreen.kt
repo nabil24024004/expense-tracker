@@ -70,8 +70,7 @@ fun AuthScreen(activity: FragmentActivity, onAuthenticated: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp),
-                shape = RoundedCornerShape(24.dp),
-                isDark = false
+                shape = RoundedCornerShape(24.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -82,8 +81,7 @@ fun AuthScreen(activity: FragmentActivity, onAuthenticated: () -> Unit) {
 
                     GlassBox(
                         modifier = Modifier.size(80.dp),
-                        shape = CircleShape,
-                        isDark = false
+                        shape = CircleShape
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(

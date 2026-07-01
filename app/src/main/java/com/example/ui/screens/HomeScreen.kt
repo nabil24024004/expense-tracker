@@ -4757,6 +4757,40 @@ fun HistoryTab(
 }
 
 @Composable
+fun SheetInfoRow(name: String, cols: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardSurface.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+            .border(1.dp, CardSurface, RoundedCornerShape(10.dp))
+            .padding(10.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(PrimaryAccent, CircleShape)
+            )
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                color = TextPrimary
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = cols,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+            color = TextSecondary,
+            lineHeight = 14.sp
+        )
+    }
+}
+
+@Composable
 fun ExcelImportGuideDialog(
     onDismiss: () -> Unit,
     onChooseFile: () -> Unit
@@ -4826,115 +4860,184 @@ fun ExcelImportGuideDialog(
                     }
                 }
 
-                Text(
-                    text = "To import your transactions, your Excel (.xls or .xlsx) file must be structured as follows:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-
-                // Table
-                Column(
+                // Tab Selection
+                var selectedTab by remember { mutableStateOf(0) } // 0 = Full Restore, 1 = Legacy Transactions
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, CardSurface, RoundedCornerShape(12.dp))
-                        .clip(RoundedCornerShape(12.dp))
+                        .background(CardSurface.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(4.dp)
                 ) {
-                    val weights = listOf(1.0f, 0.85f, 1.45f, 0.7f)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selectedTab == 0) PrimaryAccent else Color.Transparent)
+                            .clickable { selectedTab = 0 }
+                            .padding(vertical = 8.5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Full Restore",
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedTab == 0) Color.White else TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selectedTab == 1) PrimaryAccent else Color.Transparent)
+                            .clickable { selectedTab = 1 }
+                            .padding(vertical = 8.5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Legacy (TX Only)",
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedTab == 1) Color.White else TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
 
-                    // Header Row
-                    Row(
+                if (selectedTab == 0) {
+                    Text(
+                        text = "Import a full backup spreadsheet containing multiple sheets to restore your entire wallet database context:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        SheetInfoRow(name = "Accounts", cols = "Name, Balance, ColorHex, Icon, Currency, IncludeInBalance, DisplayOrder")
+                        SheetInfoRow(name = "Expenses", cols = "Date, Category, Description, Amount, Type, Account, ToAccount, Tags")
+                        SheetInfoRow(name = "Debts & Receivables", cols = "Date, Person, Type, Description, Amount, Due Date, Status")
+                        SheetInfoRow(name = "Planned Transactions", cols = "Title, Amount, Category, Type, Account, Start Date, Interval Type, Interval N, One Time, Next Due Date, Is Active, Description")
+                    }
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        BulletPoint("Auto-link Wallets:", "Transactions and planned schedules automatically map to accounts by matching Name (case-insensitive).")
+                        BulletPoint("Balance Restoration:", "Wallet balances are restored exactly as specified in the spreadsheet, without double-adjusting from transactions.")
+                        BulletPoint("New Account Insertion:", "If a transaction references a wallet that doesn't exist, it will be automatically created.")
+                    }
+                } else {
+                    Text(
+                        text = "To import transactions only, ensure your Excel (.xls or .xlsx) file has a single sheet with this column structure:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+
+                    // Table
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(PrimaryAccent.copy(alpha = 0.08f))
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .border(1.dp, CardSurface, RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(12.dp))
                     ) {
-                        val headers = listOf(
-                            "Date" to Icons.Rounded.DateRange,
-                            "Category" to Icons.Rounded.Category,
-                            "Description" to Icons.Rounded.Description,
-                            "Amount" to Icons.Rounded.Payments
-                        )
-                        headers.forEachIndexed { index, (text, icon) ->
-                            Row(
-                                modifier = Modifier.weight(weights[index]),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = null,
-                                    tint = PrimaryAccent,
-                                    modifier = Modifier.size(9.dp)
-                                )
-                                Spacer(modifier = Modifier.width(2.dp))
+                        val weights = listOf(1.0f, 0.85f, 1.45f, 0.7f)
+
+                        // Header Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(PrimaryAccent.copy(alpha = 0.08f))
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val headers = listOf(
+                                "Date" to Icons.Rounded.DateRange,
+                                "Category" to Icons.Rounded.Category,
+                                "Description" to Icons.Rounded.Description,
+                                "Amount" to Icons.Rounded.Payments
+                            )
+                            headers.forEachIndexed { index, (text, icon) ->
+                                Row(
+                                    modifier = Modifier.weight(weights[index]),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = PrimaryAccent,
+                                        modifier = Modifier.size(9.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(
+                                        text = text,
+                                        fontSize = 8.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PrimaryAccent,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Divider
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardSurface))
+
+                        // Row 1
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val rowData = listOf("2026-06-22", "Food", "Lunch\nwith team", "1250.0")
+                            rowData.forEachIndexed { index, valStr ->
                                 Text(
-                                    text = text,
-                                    fontSize = 8.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PrimaryAccent,
-                                    maxLines = 1
+                                    text = valStr,
+                                    modifier = Modifier.weight(weights[index]),
+                                    textAlign = TextAlign.Center,
+                                    fontSize = 10.sp,
+                                    color = TextPrimary,
+                                    lineHeight = 12.sp
+                                )
+                            }
+                        }
+
+                        // Divider
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardSurface))
+
+                        // Row 2
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val rowData = listOf("2026-06-21", "Bills", "Electricity\nBill", "4500.0")
+                            rowData.forEachIndexed { index, valStr ->
+                                Text(
+                                    text = valStr,
+                                    modifier = Modifier.weight(weights[index]),
+                                    textAlign = TextAlign.Center,
+                                    fontSize = 10.sp,
+                                    color = TextPrimary,
+                                    lineHeight = 12.sp
                                 )
                             }
                         }
                     }
-                    
-                    // Divider
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardSurface))
 
-                    // Row 1
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Guidelines List
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(vertical = 4.dp)
                     ) {
-                        val rowData = listOf("2026-06-22", "Food", "Lunch\nwith team", "1250.0")
-                        rowData.forEachIndexed { index, valStr ->
-                            Text(
-                                text = valStr,
-                                modifier = Modifier.weight(weights[index]),
-                                textAlign = TextAlign.Center,
-                                fontSize = 10.sp,
-                                color = TextPrimary,
-                                lineHeight = 12.sp
-                            )
-                        }
+                        BulletPoint("Columns must include:", "Date, Category, Description, and Amount (headers are case-insensitive).")
+                        BulletPoint("Supported Date Formats:", "YYYY-MM-DD, YYYY-MM-DD HH:mm:ss, DD/MM/YYYY, or Excel date cell format.")
+                        BulletPoint("Amount", "must be a positive number greater than 0.")
+                        BulletPoint("Empty rows", "or rows with invalid values are skipped automatically.")
                     }
-
-                    // Divider
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardSurface))
-
-                    // Row 2
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val rowData = listOf("2026-06-21", "Bills", "Electricity\nBill", "4500.0")
-                        rowData.forEachIndexed { index, valStr ->
-                            Text(
-                                text = valStr,
-                                modifier = Modifier.weight(weights[index]),
-                                textAlign = TextAlign.Center,
-                                fontSize = 10.sp,
-                                color = TextPrimary,
-                                lineHeight = 12.sp
-                            )
-                        }
-                    }
-                }
-
-                // Guidelines List
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(vertical = 4.dp)
-                ) {
-                    BulletPoint("Columns must include:", "Date, Category, Description, and Amount (headers are case-insensitive).")
-                    BulletPoint("Supported Date Formats:", "YYYY-MM-DD, YYYY-MM-DD HH:mm:ss, DD/MM/YYYY, or Excel date cell format.")
-                    BulletPoint("Amount", "must be a positive number greater than 0.")
-                    BulletPoint("Empty rows", "or rows with invalid values are skipped automatically.")
                 }
 
                 // Footer Buttons
