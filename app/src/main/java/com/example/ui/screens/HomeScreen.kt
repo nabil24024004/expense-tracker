@@ -725,7 +725,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(bottom = 96.dp, end = 16.dp)
+                .padding(bottom = 88.dp, end = 16.dp)
                 .width(220.dp)
         ) {
             val isDark = LocalAppColors.current == DarkAppColors
@@ -905,7 +905,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                 .fillMaxWidth()
                 .background(Color.Transparent)
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
+                .padding(bottom = 8.dp, start = 16.dp, end = 16.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
