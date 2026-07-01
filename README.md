@@ -1,4 +1,4 @@
-# Expense Tracker (v4.6) 📱💰
+# Expense Tracker (v5.0.0) 📱💰
 
 [![Kotlin Version](https://img.shields.io/badge/Kotlin-1.9.0-purple.svg)](https://kotlinlang.org/)
 [![UI Framework](https://img.shields.io/badge/Compose-Jetpack-blue.svg)](https://developer.android.com/jetpack/compose)
