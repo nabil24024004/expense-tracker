@@ -11,6 +11,9 @@ interface PlannedTransactionDao {
     @Query("SELECT * FROM planned_transactions WHERE isActive = 1 ORDER BY nextDueDate ASC")
     fun getActivePlanned(): Flow<List<PlannedTransaction>>
 
+    @Query("SELECT * FROM planned_transactions ORDER BY nextDueDate ASC")
+    suspend fun getAllPlannedSync(): List<PlannedTransaction>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlanned(planned: PlannedTransaction): Long
 

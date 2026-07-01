@@ -24,7 +24,9 @@ data class AppColors(
     val iconBackground: Color,
     val darkCardIconBackground: Color,
     val chartOrange: Color,
-    val chartPurple: Color
+    val chartPurple: Color,
+    val bottomNavBackground: Color,
+    val bottomNavSelectedBackground: Color
 )
 
 val LightAppColors = AppColors(
@@ -38,7 +40,9 @@ val LightAppColors = AppColors(
     iconBackground = Color(0xFFE5E5E2),
     darkCardIconBackground = Color(0xFF2E2E33),
     chartOrange = Color(0xFF020203),
-    chartPurple = Color(0xFFE5E5E2)
+    chartPurple = Color(0xFFE5E5E2),
+    bottomNavBackground = Color(0xFFE5E5E2),
+    bottomNavSelectedBackground = Color(0xFFF3F3F1)
 )
 
 val DarkAppColors = AppColors(
@@ -52,10 +56,20 @@ val DarkAppColors = AppColors(
     iconBackground = Color(0xFF242428),        // Muted dark icon backgrounds
     darkCardIconBackground = Color(0xFF323238),// Lighter dark icon backgrounds
     chartOrange = Color(0xFFFFFFFF),           // Adapt chart orange color to white in dark mode
-    chartPurple = Color(0xFF18181B)            // Adapt chart purple color to dark gray in dark mode
+    chartPurple = Color(0xFF18181B),           // Adapt chart purple color to dark gray in dark mode
+    bottomNavBackground = Color(0xFF242428),
+    bottomNavSelectedBackground = Color(0xFF0C0C0E)
 )
 
 val LocalAppColors = staticCompositionLocalOf { LightAppColors }
+
+val BottomNavBackground: Color
+    @Composable
+    get() = LocalAppColors.current.bottomNavBackground
+
+val BottomNavSelectedBackground: Color
+    @Composable
+    get() = LocalAppColors.current.bottomNavSelectedBackground
 
 val ThemeBackground: Color
     @Composable

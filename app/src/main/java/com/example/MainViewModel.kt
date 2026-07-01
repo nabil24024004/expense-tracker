@@ -14,6 +14,8 @@ import com.example.data.Account
 import com.example.data.AccountRepository
 import com.example.data.PlannedTransaction
 import com.example.data.PlannedTransactionRepository
+import com.example.data.ExcelHelper
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -408,6 +410,116 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun importAllData(importData: ExcelHelper.AppImportData, onComplete: (Boolean, Int) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var importedCount = 0
+                val accountMap = mutableMapOf<String, Int>()
+
+                // 1. Resolve and insert Accounts
+                val existingAccounts = accountRepository.getAllSync()
+                existingAccounts.forEach { acc ->
+                    accountMap[acc.name.trim().lowercase(Locale.US)] = acc.id
+                }
+
+                importData.accounts.forEach { acc ->
+                    val key = acc.name.trim().lowercase(Locale.US)
+                    if (!accountMap.containsKey(key)) {
+                        val newId = accountRepository.insert(acc.copy(id = 0))
+                        accountMap[key] = newId.toInt()
+                        importedCount++
+                    } else {
+                        val existingId = accountMap[key]!!
+                        accountRepository.getById(existingId)?.let { existingAcc ->
+                            accountRepository.update(existingAcc.copy(
+                                balance = acc.balance,
+                                colorHex = acc.colorHex,
+                                icon = acc.icon,
+                                currency = acc.currency,
+                                includeInBalance = acc.includeInBalance,
+                                displayOrder = acc.displayOrder
+                            ))
+                        }
+                    }
+                }
+
+                val defaultAccountId = accountMap["cash"] ?: accountMap.values.firstOrNull() ?: 1
+
+                // 2. Resolve and insert Transactions (Expenses)
+                importData.rawExpenses.forEach { rawExp ->
+                    val accId = accountMap[rawExp.accountName.trim().lowercase(Locale.US)] ?: defaultAccountId
+                    val toAccId = if (rawExp.toAccountName.isNotEmpty()) {
+                        accountMap[rawExp.toAccountName.trim().lowercase(Locale.US)]
+                    } else {
+                        null
+                    }
+
+                    val expense = Expense(
+                        amount = rawExp.amount,
+                        description = rawExp.description,
+                        category = rawExp.category,
+                        date = rawExp.date,
+                        type = rawExp.type,
+                        accountId = accId,
+                        toAccountId = toAccId,
+                        tags = rawExp.tags
+                    )
+                    repository.insert(expense)
+
+                    // Adjust balance only if accounts sheet is NOT provided (legacy mode fallback)
+                    if (importData.accounts.isEmpty()) {
+                        if (expense.type == "INCOME") {
+                            accountRepository.getById(accId)?.let { acc ->
+                                accountRepository.update(acc.copy(balance = acc.balance + expense.amount))
+                            }
+                        } else if (expense.type == "EXPENSE") {
+                            accountRepository.getById(accId)?.let { acc ->
+                                accountRepository.update(acc.copy(balance = acc.balance - expense.amount))
+                            }
+                        }
+                    }
+                    importedCount++
+                }
+
+                // 3. Resolve and insert Debts & Receivables
+                importData.debtsDues.forEach { debt ->
+                    debtDueRepository.insert(debt.copy(id = 0))
+                    importedCount++
+                }
+
+                // 4. Resolve and insert Planned Transactions
+                importData.rawPlanned.forEach { rawPlanned ->
+                    val accId = accountMap[rawPlanned.accountName.trim().lowercase(Locale.US)] ?: defaultAccountId
+                    val planned = PlannedTransaction(
+                        title = rawPlanned.title,
+                        amount = rawPlanned.amount,
+                        category = rawPlanned.category,
+                        type = rawPlanned.type,
+                        accountId = accId,
+                        startDate = rawPlanned.startDate,
+                        intervalType = rawPlanned.intervalType,
+                        intervalN = rawPlanned.intervalN,
+                        oneTime = rawPlanned.oneTime,
+                        nextDueDate = rawPlanned.nextDueDate,
+                        isActive = rawPlanned.isActive,
+                        description = rawPlanned.description
+                    )
+                    plannedTransactionRepository.insert(planned)
+                    importedCount++
+                }
+
+                withContext(Dispatchers.Main) {
+                    onComplete(true, importedCount)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    onComplete(false, 0)
+                }
+            }
+        }
+    }
+
     // Planned Transactions CRUD & Scheduling
     fun addPlannedTransaction(
         title: String,
@@ -515,11 +627,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun settleDebtDue(debtDue: DebtDue, logAsExpense: Boolean) {
-        settleDebtDuePartial(debtDue, debtDue.amount, logAsExpense)
+    fun settleDebtDue(debtDue: DebtDue, logAsExpense: Boolean, accountId: Int = 1) {
+        settleDebtDuePartial(debtDue, debtDue.amount, logAsExpense, accountId)
     }
 
-    fun settleDebtDuePartial(debtDue: DebtDue, paidAmount: Double, logAsTransaction: Boolean) {
+    fun settleDebtDuePartial(debtDue: DebtDue, paidAmount: Double, logAsTransaction: Boolean, accountId: Int = 1) {
         viewModelScope.launch {
             if (paidAmount >= debtDue.amount) {
                 val updated = debtDue.copy(isCleared = true)
@@ -528,16 +640,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val updated = debtDue.copy(amount = debtDue.amount - paidAmount)
                 debtDueRepository.update(updated)
             }
- 
+
             if (logAsTransaction) {
-                val defaultAccId = accounts.value.firstOrNull()?.id ?: 1
                 if (debtDue.type == "DEBT") {
                     addExpense(
                         amount = paidAmount,
                         description = "Repaid: ${debtDue.personName} (${debtDue.description})",
                         category = "Debt Repayment",
                         type = "EXPENSE",
-                        accountId = defaultAccId
+                        accountId = accountId
                     )
                 } else {
                     addExpense(
@@ -545,7 +656,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         description = "Collected from: ${debtDue.personName} (${debtDue.description})",
                         category = "Debt Received",
                         type = "INCOME",
-                        accountId = defaultAccId
+                        accountId = accountId
                     )
                 }
             }

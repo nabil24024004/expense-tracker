@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -19,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,10 +39,6 @@ fun AccountsSection(
     onViewAllClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val totalBalance = remember(accounts) {
-        accounts.filter { it.includeInBalance }.sumOf { it.balance }
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -53,23 +52,24 @@ fun AccountsSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Total Balance",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
+                    text = "Your Accounts",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Add or customize your bank, cash or other accounts",
+                    style = MaterialTheme.typography.bodySmall.copy(
                         color = TextSecondary
                     )
                 )
-                Text(
-                    text = if (hideBalance) "••••" else String.format(java.util.Locale.US, "৳%,.2f", totalBalance),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Black,
-                        color = TextPrimary,
-                        letterSpacing = (-0.5).sp
-                    )
-                )
             }
+
+            Spacer(modifier = Modifier.width(16.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconButton(
@@ -173,36 +173,39 @@ fun AccountCardItem(
                 .padding(12.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(cardColor.copy(alpha = 0.2f), CircleShape),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = iconVector,
-                        contentDescription = account.name,
-                        tint = cardColor,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(cardColor.copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = iconVector,
+                            contentDescription = account.name,
+                            tint = cardColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    
+                    if (!account.includeInBalance) {
+                        Icon(
+                            imageVector = Icons.Rounded.VisibilityOff,
+                            contentDescription = "Excluded",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
                 
-                if (!account.includeInBalance) {
-                    Icon(
-                        imageVector = Icons.Rounded.VisibilityOff,
-                        contentDescription = "Excluded",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     text = account.name,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -212,26 +215,46 @@ fun AccountCardItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                
                 val sub = getSubtypeDisplayLabel(account.icon)
                 if (sub.isNotEmpty()) {
                     Text(
                         text = sub,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 9.sp,
-                            color = DarkCardTextSecondary.copy(alpha = 0.7f)
+                            color = DarkCardTextSecondary.copy(alpha = 0.6f)
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(
-                    text = if (hideBalance) "••••" else String.format(java.util.Locale.US, "%s%,.0f", account.currency, account.balance),
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = cardColor
-                    )
+            }
+
+            // Dashed Divider
+            val dividerLineColor = DarkCardTextSecondary.copy(alpha = 0.2f)
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+            ) {
+                val pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f), 0f)
+                drawLine(
+                    color = dividerLineColor,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    pathEffect = pathEffect,
+                    strokeWidth = 1f
                 )
             }
+
+            // Bottom Section (Balance)
+            Text(
+                text = if (hideBalance) "••••" else String.format(java.util.Locale.US, "%s%,.0f", account.currency, account.balance),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = cardColor
+                )
+            )
         }
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.Account
 import com.example.data.DebtDue
 import com.example.ui.theme.*
 import java.text.SimpleDateFormat
@@ -36,7 +37,8 @@ import java.util.*
 fun DebtsSection(
     type: String, // "DEBT" or "DUE"
     debtsDues: List<DebtDue>,
-    onSettleDebtDue: (DebtDue, paidAmount: Double, logAsTransaction: Boolean) -> Unit,
+    accounts: List<Account>,
+    onSettleDebtDue: (DebtDue, paidAmount: Double, logAsTransaction: Boolean, accountId: Int) -> Unit,
     onDeleteDebtDue: (Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -202,6 +204,8 @@ fun DebtsSection(
         var paymentTab by remember { mutableStateOf("full") } // "full" or "partial"
         var settleAmountText by remember { mutableStateOf("") }
         var logAsTransaction by remember { mutableStateOf(true) }
+        var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id ?: 1) }
+        var accountDropdownExpanded by remember { mutableStateOf(false) }
 
         // Set amount automatically when switching tabs
         LaunchedEffect(paymentTab, target.amount) {
@@ -395,6 +399,62 @@ fun DebtsSection(
                         }
                     }
 
+                    if (logAsTransaction && accounts.isNotEmpty()) {
+                        val selectedAccount = accounts.find { it.id == selectedAccountId } ?: accounts.firstOrNull()
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "Select Account",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextSecondary
+                                )
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(CardSurface)
+                                    .clickable { accountDropdownExpanded = true }
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = selectedAccount?.name ?: "Select Account",
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Rounded.ArrowDropDown,
+                                        contentDescription = "Expand",
+                                        tint = TextSecondary
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = accountDropdownExpanded,
+                                    onDismissRequest = { accountDropdownExpanded = false },
+                                    modifier = Modifier.background(ThemeBackground)
+                                ) {
+                                    accounts.forEach { acc ->
+                                        DropdownMenuItem(
+                                            text = { Text(acc.name, color = TextPrimary) },
+                                            onClick = {
+                                                selectedAccountId = acc.id
+                                                accountDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // 5. Dynamic Info Banner
                     val bannerText = when {
                         isFull -> if (isDebt) "Pending debt will be marked as fully settled." else "Pending receivable will be marked as fully settled."
@@ -429,7 +489,7 @@ fun DebtsSection(
                     onClick = {
                         val amountToPay = if (paymentTab == "full") target.amount else parsedAmount
                         if (amountToPay > 0.0 && amountToPay <= target.amount) {
-                            onSettleDebtDue(target, amountToPay, logAsTransaction)
+                            onSettleDebtDue(target, amountToPay, logAsTransaction, selectedAccountId)
                             val msg = if (amountToPay < target.amount) "Partial settlement recorded!" else "Record fully settled!"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             itemToSettle = null

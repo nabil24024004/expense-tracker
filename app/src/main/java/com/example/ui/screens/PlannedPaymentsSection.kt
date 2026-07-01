@@ -248,28 +248,38 @@ fun PlannedTransactionItem(
                 }
 
                 if (planned.type == "EXPENSE") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(
-                            onClick = onSkip,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(28.dp),
-                            colors = ButtonDefaults.textButtonColors(contentColor = TextSecondary)
-                        ) {
-                            Text("Skip", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
+                    if (isOverdue) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = onSkip,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(28.dp),
+                                colors = ButtonDefaults.textButtonColors(contentColor = TextSecondary)
+                            ) {
+                                Text("Skip", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
 
-                        Button(
-                            onClick = onPay,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(28.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFEA3B35),
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Pay", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = onPay,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(28.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFEA3B35),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Pay", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
+                    } else {
+                        Text(
+                            text = "Upcoming",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
                     }
                 } else {
                     Text(
