@@ -1545,18 +1545,20 @@ fun HomeTab(
             }
             val label = dayFormat.format(Date(dayStart.timeInMillis))
             val sum = expenses
-                .filter { it.date in dayStart.timeInMillis..dayEnd.timeInMillis }
+                .filter { it.type == "EXPENSE" && it.date in dayStart.timeInMillis..dayEnd.timeInMillis }
                 .sumOf { it.amount }
             result.add(label to sum)
         }
         result
     }
 
-    val lastSpendText = if (expenses.isNotEmpty()) {
-        val last = expenses.first()
-        "Latest: ৳${String.format(Locale.US, "%.0f", last.amount)} spent on ${last.category}"
-    } else {
-        "Goal target: ৳${String.format(Locale.US, "%.0f", budgetLimit)} set"
+    val lastSpendText = remember(expenses) {
+        val lastExpense = expenses.firstOrNull { it.type == "EXPENSE" }
+        if (lastExpense != null) {
+            "Latest: ৳${String.format(Locale.US, "%.0f", lastExpense.amount)} spent on ${lastExpense.category}"
+        } else {
+            "Goal target: ৳${String.format(Locale.US, "%.0f", budgetLimit)} set"
+        }
     }
 
     val hubCategories = remember(expenses, plannedTransactions) {
@@ -2394,17 +2396,18 @@ fun AnalyticsTab(
             }
             val label = "W${4 - w}"
             val sum = expenses
-                .filter { it.date in weekStart.timeInMillis..weekEnd.timeInMillis }
+                .filter { it.type == "EXPENSE" && it.date in weekStart.timeInMillis..weekEnd.timeInMillis }
                 .sumOf { it.amount }
             result.add(label to sum)
         }
         result
     }
 
-    val totalSpent = remember(expenses) { expenses.sumOf { it.amount } }
+    val totalSpent = remember(expenses) { expenses.filter { it.type == "EXPENSE" }.sumOf { it.amount } }
 
     val categoryData = remember(expenses) {
-        expenses.groupBy { it.category }
+        expenses.filter { it.type == "EXPENSE" }
+            .groupBy { it.category }
             .map { (cat, list) -> cat to list.sumOf { it.amount } }
             .sortedByDescending { it.second }
     }
@@ -2413,9 +2416,10 @@ fun AnalyticsTab(
 
 
     val daysSinceFirst = remember(expenses) {
-        if (expenses.isEmpty()) 1
+        val expenseList = expenses.filter { it.type == "EXPENSE" }
+        if (expenseList.isEmpty()) 1
         else {
-            val earliest = expenses.minOf { it.date }
+            val earliest = expenseList.minOf { it.date }
             val diff = System.currentTimeMillis() - earliest
             maxOf(1, (diff / (1000L * 60 * 60 * 24)).toInt())
         }
@@ -2441,7 +2445,7 @@ fun AnalyticsTab(
             }
             val label = dayFormat.format(Date(dayStart.timeInMillis))
             val sum = expenses
-                .filter { it.date in dayStart.timeInMillis..dayEnd.timeInMillis }
+                .filter { it.type == "EXPENSE" && it.date in dayStart.timeInMillis..dayEnd.timeInMillis }
                 .sumOf { it.amount }
             result.add(label to sum)
         }
@@ -2464,22 +2468,24 @@ fun AnalyticsTab(
     }
 
 
-    val biggestExpense = remember(expenses) { expenses.maxByOrNull { it.amount } }
+    val biggestExpense = remember(expenses) { expenses.filter { it.type == "EXPENSE" }.maxByOrNull { it.amount } }
 
 
     val mostActiveDay = remember(expenses) {
-        if (expenses.isEmpty()) null
+        val expenseList = expenses.filter { it.type == "EXPENSE" }
+        if (expenseList.isEmpty()) null
         else {
             val dayFormat = SimpleDateFormat("EEEE", Locale.US)
-            expenses.groupBy { dayFormat.format(Date(it.date)) }
+            expenseList.groupBy { dayFormat.format(Date(it.date)) }
                 .maxByOrNull { it.value.size }
                 ?.let { (day, list) -> day to list.size }
         }
     }
 
 
-    val avgPerTransaction = remember(expenses) {
-        if (expenses.isEmpty()) 0.0 else totalSpent / expenses.size
+    val avgPerTransaction = remember(expenses, totalSpent) {
+        val expenseList = expenses.filter { it.type == "EXPENSE" }
+        if (expenseList.isEmpty()) 0.0 else totalSpent / expenseList.size
     }
 
 
@@ -6164,6 +6170,13 @@ fun ExpenseItem(
         accounts.firstOrNull { it.id == expense.accountId }
     }
 
+    val toAccount = remember(expense.toAccountId, accounts) {
+        accounts.firstOrNull { it.id == expense.toAccountId }
+    }
+
+    val isIncome = remember(expense.type) { expense.type == "INCOME" }
+    val isTransfer = remember(expense.type) { expense.type == "TRANSFER" }
+
     val accountColor = remember(account) {
         if (account != null) {
             try {
@@ -6233,9 +6246,16 @@ fun ExpenseItem(
                     )
                 }
                 
-                val isIncome = expense.type == "INCOME"
-                val amountColor = if (isIncome) Color(0xFF4CAF50) else Color(0xFFEA3B35)
-                val amountPrefix = if (isIncome) "+" else "-"
+                val amountColor = when {
+                    isIncome -> Color(0xFF4CAF50)
+                    isTransfer -> TextPrimary
+                    else -> Color(0xFFEA3B35)
+                }
+                val amountPrefix = when {
+                    isIncome -> "+"
+                    isTransfer -> ""
+                    else -> "-"
+                }
                 
                 Text(
                     text = "$amountPrefix৳${String.format(Locale.US, "%,.2f", expense.amount)}",
@@ -6275,7 +6295,11 @@ fun ExpenseItem(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = account.name,
+                                text = if (isTransfer && toAccount != null) {
+                                    "${account.name} ➔ ${toAccount.name}"
+                                } else {
+                                    account.name
+                                },
                                 color = accountColor,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold

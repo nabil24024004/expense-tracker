@@ -2,7 +2,5 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/tmp_clone/liquid-glass-skill" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/tmp_clone/plugins" vcs="Git" />
   </component>
 </project>

@@ -107,7 +107,7 @@ object BudgetPeriodHelper {
         val start = range.first
         val end = range.second
         
-        val spent = expenses.filter { it.date in start..end }.sumOf { it.amount }
+        val spent = expenses.filter { it.type == "EXPENSE" && it.date in start..end }.sumOf { it.amount }
         
         // Total days in the period
         val diffMs = end - start

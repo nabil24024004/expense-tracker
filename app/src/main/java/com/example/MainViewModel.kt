@@ -281,7 +281,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             
             val currentExpenses = expenses.value
             val oldPeriodTotal = currentExpenses.filter { it.type == "EXPENSE" && it.date in range.first..range.second }.sumOf { it.amount }
-            val newPeriodTotal = oldPeriodTotal + amount
+            val newPeriodTotal = if (type == "EXPENSE") oldPeriodTotal + amount else oldPeriodTotal
             val limit = budgetLimit.value
  
             repository.insert(newExpense)
