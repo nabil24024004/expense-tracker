@@ -22,20 +22,31 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.draw.clip
 import com.example.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
+
+import com.example.data.Account
+import androidx.compose.material.icons.rounded.ArrowDropDown
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddDebtDueDialog(
     onDismiss: () -> Unit,
-    onConfirm: (personName: String, amount: Double, description: String, type: String, dueDate: Long?) -> Unit
+    accounts: List<Account> = emptyList(),
+    onConfirm: (personName: String, amount: Double, description: String, type: String, dueDate: Long?, accountId: Int?) -> Unit
 ) {
     var personName by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("DEBT") } // "DEBT" (Owed to them) or "DUE" (Owed to me)
+    
+    var selectedAccountId by remember { mutableStateOf(accounts.find { it.id == 1 }?.id ?: accounts.firstOrNull()?.id) }
+    var accountDropdownExpanded by remember { mutableStateOf(false) }
+    val selectedAccount = remember(selectedAccountId, accounts) {
+        accounts.find { it.id == selectedAccountId }
+    }
     
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
@@ -167,6 +178,62 @@ fun AddDebtDueDialog(
                     )
                 )
 
+                // Account Dropdown Selector
+                if (accounts.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Account",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = TextSecondary
+                            )
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(CardSurface)
+                                .clickable { accountDropdownExpanded = true }
+                                .padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = selectedAccount?.name ?: "Select Account",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = "Expand",
+                                    tint = TextSecondary
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = accountDropdownExpanded,
+                                onDismissRequest = { accountDropdownExpanded = false },
+                                modifier = Modifier.background(ThemeBackground)
+                            ) {
+                                accounts.forEach { acc ->
+                                    DropdownMenuItem(
+                                        text = { Text(acc.name, color = TextPrimary) },
+                                        onClick = {
+                                            selectedAccountId = acc.id
+                                            accountDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Due Date Field (Clickable)
                 Box(
                     modifier = Modifier
@@ -220,7 +287,7 @@ fun AddDebtDueDialog(
                             val amt = amount.toDoubleOrNull() ?: 0.0
                             if (amt > 0 && personName.trim().isNotEmpty()) {
                                 val finalDescription = if (description.trim().isEmpty()) "Debt/Receivable log" else description.trim()
-                                onConfirm(personName.trim(), amt, finalDescription, type, dueDateMs)
+                                onConfirm(personName.trim(), amt, finalDescription, type, dueDateMs, selectedAccountId)
                             }
                         },
                         modifier = Modifier.testTag("save_debt_button"),

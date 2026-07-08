@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
@@ -71,10 +72,6 @@ import com.example.MainViewModel
 import com.example.data.Expense
 import com.example.data.DebtDue
 import com.example.data.BudgetPeriodHelper
-import com.example.data.PeriodProjection
-import com.example.ui.screens.AddDebtDueDialog
-import com.example.ui.screens.DebtsSection
-import com.example.ui.components.GlassBox
 import com.example.ui.components.SimpleBarChart
 import com.example.ui.components.SmoothLineChart
 import com.example.ui.theme.*
@@ -178,7 +175,6 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
     var plannedToEdit by remember { mutableStateOf<PlannedTransaction?>(null) }
     var viewedAccountForDetails by remember { mutableStateOf<Account?>(null) }
 
-    var showChatAssistant by remember { mutableStateOf(false) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -230,7 +226,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "fabScale"
     )
-    val totalAmount = activePeriodSpent
+
     val existingCategories = remember(expenses, plannedTransactions) {
         ((expenses.map { it.category.trim() } + plannedTransactions.map { it.category.trim() }).filter { it.isNotEmpty() } + listOf("Food", "Other")).distinct()
     }
@@ -402,8 +398,9 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
             if (showAddDebtDueDialog) {
                 AddDebtDueDialog(
                     onDismiss = { showAddDebtDueDialog = false },
-                    onConfirm = { name, amt, desc, type, dueDate ->
-                        viewModel.addDebtDue(name, amt, desc, type, dueDate)
+                    accounts = accounts,
+                    onConfirm = { name, amt, desc, type, dueDate, accountId ->
+                        viewModel.addDebtDue(name, amt, desc, type, dueDate, accountId)
                         showAddDebtDueDialog = false
                     }
                 )
@@ -605,52 +602,56 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
 
 
 
-            when (currentTab) {
-                "home" -> HomeTab(
-                    viewModel = viewModel,
-                    userName = userName,
-                    profileImageBitmap = profileImageBitmap,
-                    totalAmount = totalAmount,
-                    budgetLimit = budgetLimit,
-                    expenses = expenses,
-                    hasUnreadNotifications = hasUnreadNotifications,
-                    onAddExpenseClick = { category ->
-                        addDialogPrefillCategory = category
-                        showAddDialog = true
-                    },
-                    onNavigate = { tab ->
-                        if (tab.startsWith("history:")) {
-                            activeHistorySection = tab.substringAfter("history:")
-                            currentTab = "history"
-                        } else {
-                            currentTab = tab
-                        }
-                    },
-                    onShowNotifications = {
-                        viewModel.markNotificationsAsRead()
-                        showNotificationsDialog = true
-                    },
-                    onEditBudgetClick = {
-                        showEditBudgetDialog = true
-                    },
-                    accounts = accounts,
-                    plannedTransactions = plannedTransactions,
-                    onAddAccountClick = { showAddAccountDialog = true },
-                    onAccountClick = { viewedAccountForDetails = it },
-                    onTransferClick = { showTransferDialog = true },
-                    onViewAllAccountsClick = { showAllAccountsDialog = true },
-                    onAddPlannedClick = { showAddPlannedDialog = true },
-                    onPlannedClick = { plannedToEdit = it },
-                    onPayPlanned = { viewModel.executePlannedTransaction(it) },
-                    onSkipPlanned = { viewModel.skipPlannedTransaction(it) }
-                )
-                "analytics" -> AnalyticsTab(
-                    expenses = expenses,
-                    debtsDues = debtsDues,
-                    budgetLimit = budgetLimit,
-                    viewModel = viewModel
-                )
-                "history" -> {
+            Box(modifier = Modifier.fillMaxSize()) {
+                TabContent(visible = currentTab == "home") {
+                    HomeTab(
+                        viewModel = viewModel,
+                        userName = userName,
+                        profileImageBitmap = profileImageBitmap,
+                        activePeriodSpent = activePeriodSpent,
+                        budgetLimit = budgetLimit,
+                        expenses = expenses,
+                        hasUnreadNotifications = hasUnreadNotifications,
+                        onAddExpenseClick = { category ->
+                            addDialogPrefillCategory = category
+                            showAddDialog = true
+                        },
+                        onNavigate = { tab ->
+                            if (tab.startsWith("history:")) {
+                                activeHistorySection = tab.substringAfter("history:")
+                                currentTab = "history"
+                            } else {
+                                currentTab = tab
+                            }
+                        },
+                        onShowNotifications = {
+                            viewModel.markNotificationsAsRead()
+                            showNotificationsDialog = true
+                        },
+                        onEditBudgetClick = {
+                            showEditBudgetDialog = true
+                        },
+                        accounts = accounts,
+                        plannedTransactions = plannedTransactions,
+                        onAddAccountClick = { showAddAccountDialog = true },
+                        onAccountClick = { viewedAccountForDetails = it },
+                        onTransferClick = { showTransferDialog = true },
+                        onViewAllAccountsClick = { showAllAccountsDialog = true },
+                        onAddPlannedClick = { showAddPlannedDialog = true },
+                        onPlannedClick = { plannedToEdit = it },
+                        onPayPlanned = { viewModel.executePlannedTransaction(it) },
+                        onSkipPlanned = { viewModel.skipPlannedTransaction(it) }
+                    )
+                }
+                TabContent(visible = currentTab == "analytics") {
+                    AnalyticsTab(
+                        expenses = expenses,
+                        debtsDues = debtsDues,
+                        budgetLimit = budgetLimit,
+                        viewModel = viewModel
+                    )
+                }
+                TabContent(visible = currentTab == "history") {
                     val hideIncome by viewModel.hideIncome.collectAsState()
                     HistoryTab(
                         viewModel = viewModel,
@@ -668,26 +669,28 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                         hideIncome = hideIncome
                     )
                 }
-                "profile" -> ProfileTab(
-                    viewModel = viewModel,
-                    userName = userName,
-                    profileImageBitmap = profileImageBitmap,
-                    onUploadImageClick = {
-                        requestStoragePermission {
-                            imagePickerLauncher.launch("image/*")
+                TabContent(visible = currentTab == "profile") {
+                    ProfileTab(
+                        viewModel = viewModel,
+                        userName = userName,
+                        profileImageBitmap = profileImageBitmap,
+                        onUploadImageClick = {
+                            requestStoragePermission {
+                                imagePickerLauncher.launch("image/*")
+                            }
+                        },
+                        onUpdateName = { name -> viewModel.updateUserName(name) },
+                        budgetLimit = budgetLimit,
+                        biometricsEnabled = biometricsEnabled,
+                        themeSelection = themeSelection,
+                        activity = activity,
+                        expenses = expenses,
+                        debtsDues = debtsDues,
+                        onRequestStoragePermission = { action ->
+                            requestStoragePermission(action)
                         }
-                    },
-                    onUpdateName = { name -> viewModel.updateUserName(name) },
-                    budgetLimit = budgetLimit,
-                    biometricsEnabled = biometricsEnabled,
-                    themeSelection = themeSelection,
-                    activity = activity,
-                    expenses = expenses,
-                    debtsDues = debtsDues,
-                    onRequestStoragePermission = { action ->
-                        requestStoragePermission(action)
-                    }
-                )
+                    )
+                }
             }
         }
 
@@ -915,36 +918,40 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
             ) {
 
                 val isDark = LocalAppColors.current == DarkAppColors
-                val navGlassBgBrush = if (isDark) {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1E1E22).copy(alpha = 0.88f),
-                            Color(0xFF141416).copy(alpha = 0.94f)
+                val navGlassBgBrush = remember(isDark) {
+                    if (isDark) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1E1E22).copy(alpha = 0.88f),
+                                Color(0xFF141416).copy(alpha = 0.94f)
+                            )
                         )
-                    )
-                } else {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFFFFFFF).copy(alpha = 0.94f),
-                            Color(0xFFEBEBE8).copy(alpha = 0.88f)
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFFFFFFF).copy(alpha = 0.94f),
+                                Color(0xFFEBEBE8).copy(alpha = 0.88f)
+                            )
                         )
-                    )
+                    }
                 }
                 
-                val navGlassBorder = if (isDark) {
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.32f), // Stronger reflection at top-left
-                            Color.White.copy(alpha = 0.05f)
+                val navGlassBorder = remember(isDark) {
+                    if (isDark) {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.32f), // Stronger reflection at top-left
+                                Color.White.copy(alpha = 0.05f)
+                            )
                         )
-                    )
-                } else {
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.75f),
-                            Color.Black.copy(alpha = 0.12f)
+                    } else {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.75f),
+                                Color.Black.copy(alpha = 0.12f)
+                            )
                         )
-                    )
+                    }
                 }
 
                 Box(
@@ -957,11 +964,10 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             spotColor = Color.Black.copy(alpha = 0.15f)
                         )
                 ) {
-                    // 1. Blurred/Frosted background layer
+                    // 1. Frosted background layer (no blur modifier to avoid layout-invalidation lag)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .blur(16.dp)
                             .background(navGlassBgBrush, RoundedCornerShape(32.dp))
                     )
 
@@ -978,103 +984,111 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val tabs = listOf(
-                                Triple("home", Icons.Rounded.Home, "Home"),
-                                Triple("history", Icons.AutoMirrored.Rounded.List, "Logs"),
-                                Triple("analytics", Icons.Rounded.BarChart, "Stats"),
-                                Triple("profile", Icons.Rounded.Person, "Profile")
-                            )
+                            val tabs = remember {
+                                listOf(
+                                    Triple("home", Icons.Rounded.Home, "Home"),
+                                    Triple("history", Icons.AutoMirrored.Rounded.List, "Logs"),
+                                    Triple("analytics", Icons.Rounded.BarChart, "Stats"),
+                                    Triple("profile", Icons.Rounded.Person, "Profile")
+                                )
+                            }
 
                             tabs.forEach { (tabId, icon, label) ->
-                                val isSelected = currentTab == tabId
-                                
-                                val itemInteractionSource = remember { MutableInteractionSource() }
-                                val itemPressed by itemInteractionSource.collectIsPressedAsState()
-                                val itemScale by animateFloatAsState(if (itemPressed) 0.92f else 1f, label = "tabItemScale")
+                                key(tabId) {
+                                    val isSelected = currentTab == tabId
+                                    
+                                    val itemInteractionSource = remember { MutableInteractionSource() }
+                                    val itemPressed by itemInteractionSource.collectIsPressedAsState()
+                                    val itemScale by animateFloatAsState(if (itemPressed) 0.92f else 1f, label = "tabItemScale")
 
-                                val selectedTabBg = if (isSelected) {
-                                    if (isDark) {
-                                        Color(0xFFFFFFFF).copy(alpha = 0.15f) // Frosted white glass overlay
-                                    } else {
-                                        Color(0xFF000000).copy(alpha = 0.10f) // Soft overlay
-                                    }
-                                 } else {
-                                     Color.Transparent
-                                 }
-                                 
-                                 val selectedTabBorder = if (isSelected) {
-                                     if (isDark) {
-                                         Brush.linearGradient(
-                                             colors = listOf(
-                                                 Color.White.copy(alpha = 0.25f),
-                                                 Color.White.copy(alpha = 0.02f)
-                                             )
-                                         )
-                                     } else {
-                                         Brush.linearGradient(
-                                             colors = listOf(
-                                                 Color.Black.copy(alpha = 0.15f),
-                                                 Color.Black.copy(alpha = 0.02f)
-                                             )
-                                         )
-                                     }
-                                 } else {
-                                     Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent))
-                                 }
-
-                                Box(
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            scaleX = itemScale
-                                            scaleY = itemScale
-                                        }
-                                        .then(
-                                            if (isSelected) {
-                                                Modifier
-                                                    .shadow(
-                                                        elevation = 4.dp,
-                                                        shape = RoundedCornerShape(24.dp),
-                                                        clip = false,
-                                                        spotColor = Color.Black.copy(alpha = 0.25f)
-                                                    )
-                                                    .background(selectedTabBg, RoundedCornerShape(24.dp))
-                                                    .border(0.5.dp, selectedTabBorder, RoundedCornerShape(24.dp))
-                                            } else {
-                                                Modifier
-                                                    .clip(RoundedCornerShape(24.dp))
-                                            }
-                                        )
-                                        .clickable(
-                                            interactionSource = itemInteractionSource,
-                                            indication = LocalIndication.current
-                                        ) { currentTab = tabId }
-                                        .padding(horizontal = if (isSelected) 14.dp else 12.dp, vertical = 8.dp)
-                                        .animateContentSize(
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                                stiffness = Spring.StiffnessMedium
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = if (isSelected) TextPrimary else TextSecondary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                    val selectedTabBg = remember(isSelected, isDark) {
                                         if (isSelected) {
-                                            Text(
-                                                text = label,
-                                                color = TextPrimary,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp,
-                                                maxLines = 1
+                                            if (isDark) {
+                                                Color(0xFFFFFFFF).copy(alpha = 0.15f) // Frosted white glass overlay
+                                            } else {
+                                                Color(0xFF000000).copy(alpha = 0.10f) // Soft overlay
+                                            }
+                                        } else {
+                                            Color.Transparent
+                                        }
+                                    }
+                                     
+                                    val selectedTabBorder = remember(isSelected, isDark) {
+                                        if (isSelected) {
+                                            if (isDark) {
+                                                Brush.linearGradient(
+                                                    colors = listOf(
+                                                        Color.White.copy(alpha = 0.25f),
+                                                        Color.White.copy(alpha = 0.02f)
+                                                    )
+                                                )
+                                            } else {
+                                                Brush.linearGradient(
+                                                    colors = listOf(
+                                                        Color.Black.copy(alpha = 0.15f),
+                                                        Color.Black.copy(alpha = 0.02f)
+                                                    )
+                                                )
+                                            }
+                                        } else {
+                                            Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent))
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .graphicsLayer {
+                                                scaleX = itemScale
+                                                scaleY = itemScale
+                                            }
+                                            .then(
+                                                if (isSelected) {
+                                                    Modifier
+                                                        .shadow(
+                                                            elevation = 4.dp,
+                                                            shape = RoundedCornerShape(24.dp),
+                                                            clip = false,
+                                                            spotColor = Color.Black.copy(alpha = 0.25f)
+                                                        )
+                                                        .background(selectedTabBg, RoundedCornerShape(24.dp))
+                                                        .border(0.5.dp, selectedTabBorder, RoundedCornerShape(24.dp))
+                                                } else {
+                                                    Modifier
+                                                        .clip(RoundedCornerShape(24.dp))
+                                                }
                                             )
+                                            .clickable(
+                                                interactionSource = itemInteractionSource,
+                                                indication = LocalIndication.current
+                                            ) { currentTab = tabId }
+                                            .padding(horizontal = if (isSelected) 14.dp else 12.dp, vertical = 8.dp)
+                                            .animateContentSize(
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                                    stiffness = Spring.StiffnessMedium
+                                                )
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = label,
+                                                tint = if (isSelected) TextPrimary else TextSecondary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            if (isSelected) {
+                                                Text(
+                                                    text = label,
+                                                    color = TextPrimary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    maxLines = 1
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1139,17 +1153,17 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
 
         if (showNotificationsDialog) {
             Dialog(onDismissRequest = { showNotificationsDialog = false }) {
-                val notificationSections = remember(expenses, budgetLimit, totalAmount) {
+                val notificationSections = remember(expenses, budgetLimit, activePeriodSpent) {
                     val sections = mutableListOf<Pair<String, List<NotificationItem>>>()
 
 
                     val budgetAlerts = mutableListOf<NotificationItem>()
-                    val percentUsed = if (budgetLimit > 0) (totalAmount / budgetLimit * 100).toInt() else 0
+                    val percentUsed = if (budgetLimit > 0) (activePeriodSpent / budgetLimit * 100).toInt() else 0
 
-                    if (totalAmount > budgetLimit) {
+                    if (activePeriodSpent > budgetLimit) {
                         budgetAlerts.add(NotificationItem(
                             title = "Budget Exceeded",
-                            text = "You've overspent by ৳${String.format(Locale.US, "%,.0f", totalAmount - budgetLimit)}. Review your recent expenses.",
+                            text = "You've overspent by ৳${String.format(Locale.US, "%,.0f", activePeriodSpent - budgetLimit)}. Review your recent expenses.",
                             icon = Icons.Rounded.Error,
                             colorType = "accent",
                             severity = 2
@@ -1157,7 +1171,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                     } else if (percentUsed >= 80) {
                         budgetAlerts.add(NotificationItem(
                             title = "High Spending Alert",
-                            text = "$percentUsed% of budget used (৳${String.format(Locale.US, "%,.0f", budgetLimit - totalAmount)} remaining).",
+                            text = "$percentUsed% of budget used (৳${String.format(Locale.US, "%,.0f", budgetLimit - activePeriodSpent)} remaining).",
                             icon = Icons.Rounded.Warning,
                             colorType = "accent",
                             severity = 1
@@ -1165,7 +1179,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                     } else if (expenses.isNotEmpty()) {
                         budgetAlerts.add(NotificationItem(
                             title = "Budget On Track",
-                            text = "$percentUsed% used — ৳${String.format(Locale.US, "%,.0f", budgetLimit - totalAmount)} remaining this month.",
+                            text = "$percentUsed% used — ৳${String.format(Locale.US, "%,.0f", budgetLimit - activePeriodSpent)} remaining this month.",
                             icon = Icons.Rounded.CheckCircle,
                             colorType = "primary",
                             severity = 0
@@ -1181,7 +1195,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                         val topCat = categoryGroups.maxByOrNull { it.value.sumOf { e -> e.amount } }
                         topCat?.let {
                             val topAmt = it.value.sumOf { e -> e.amount }
-                            val topPct = if (totalAmount > 0) (topAmt / totalAmount * 100).toInt() else 0
+                            val topPct = if (activePeriodSpent > 0) (topAmt / activePeriodSpent * 100).toInt() else 0
                             analysis.add(NotificationItem(
                                 title = "Top Category: ${it.key}",
                                 text = "৳${String.format(Locale.US, "%,.0f", topAmt)} spent ($topPct% of total). ${if (topPct > 50) "Consider diversifying your spending." else ""}",
@@ -1192,7 +1206,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                         }
 
 
-                        val avgPerTxn = totalAmount / expenses.size
+                        val avgPerTxn = activePeriodSpent / expenses.size
                         analysis.add(NotificationItem(
                             title = "Avg. Transaction: ৳${String.format(Locale.US, "%,.0f", avgPerTxn)}",
                             text = "Across ${expenses.size} total transactions.",
@@ -1393,7 +1407,7 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                                         modifier = Modifier.padding(bottom = 8.dp)
                                     )
                                 }
-                                items(items) { item ->
+                                items(items, key = { it.title }) { item ->
                                     NotificationCard(item = item)
                                     Spacer(modifier = Modifier.height(6.dp))
                                 }
@@ -1414,7 +1428,7 @@ fun HomeTab(
     viewModel: MainViewModel,
     userName: String,
     profileImageBitmap: Bitmap?,
-    totalAmount: Double,
+    activePeriodSpent: Double,
     budgetLimit: Double,
     expenses: List<Expense>,
     hasUnreadNotifications: Boolean,
@@ -1444,38 +1458,41 @@ fun HomeTab(
     var selectedFilter by remember { mutableStateOf("All") }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
-    val displayExpenses = remember(expenses, selectedFilter, hideIncome) {
-        val todayStart = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        
-        val weekStart = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        
-        val monthStart = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
+    val displayExpenses by produceState(initialValue = emptyList<Expense>(), expenses, selectedFilter, hideIncome) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            
+            val weekStart = Calendar.getInstance().apply {
+                firstDayOfWeek = Calendar.SUNDAY
+                set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            
+            val monthStart = Calendar.getInstance().apply {
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
 
-        val baseList = if (hideIncome) expenses.filter { it.type != "INCOME" } else expenses
-        val filtered = when (selectedFilter) {
-            "Today" -> baseList.filter { it.date >= todayStart }
-            "This Week" -> baseList.filter { it.date >= weekStart }
-            "This Month" -> baseList.filter { it.date >= monthStart }
-            else -> baseList
+            val baseList = if (hideIncome) expenses.filter { it.type != "INCOME" } else expenses
+            val filtered = when (selectedFilter) {
+                "Today" -> baseList.filter { it.date >= todayStart }
+                "This Week" -> baseList.filter { it.date >= weekStart }
+                "This Month" -> baseList.filter { it.date >= monthStart }
+                else -> baseList
+            }
+            filtered.take(4)
         }
-        filtered.take(4)
     }
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -1758,7 +1775,7 @@ fun HomeTab(
                 }
                 val totalBalanceText = if (hideBalance) "••••" else String.format(Locale.US, "%,.2f", totalAccountsBalance)
 
-                val remainingBudget = (budgetLimit - totalAmount).coerceAtLeast(0.0)
+                val remainingBudget = (budgetLimit - activePeriodSpent).coerceAtLeast(0.0)
                 val remainingText = if (hideBalance) "••••" else String.format(Locale.US, "%,.2f", remainingBudget)
 
                 // 1. Total Accounts Balance Card
@@ -1878,7 +1895,7 @@ fun HomeTab(
                 }
 
                 // 3. Spent of period target Row
-                val spentText = if (hideBalance) "••••" else String.format(Locale.US, "%,.2f", totalAmount)
+                val spentText = if (hideBalance) "••••" else String.format(Locale.US, "%,.2f", activePeriodSpent)
                 val periodLabel = when (budgetPeriodType) {
                     "weekly" -> "weekly"
                     "custom" -> {
@@ -1953,7 +1970,7 @@ fun HomeTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(hubCategories) { catName ->
+                    items(hubCategories, key = { it }) { catName ->
                         val style = getCategoryStyle(catName)
                         Card(
                             shape = RoundedCornerShape(20.dp),
@@ -2380,77 +2397,14 @@ fun AnalyticsTab(
     val budgetCustomStartDate by viewModel.budgetCustomStartDate.collectAsState()
     val budgetCustomEndDate by viewModel.budgetCustomEndDate.collectAsState()
 
-    val last4WeeksData = remember(expenses) {
-        val cal = Calendar.getInstance()
-        val result = mutableListOf<Pair<String, Double>>()
-        for (w in 3 downTo 0) {
-            val weekStart = Calendar.getInstance().apply {
-                timeInMillis = System.currentTimeMillis()
-                add(Calendar.DAY_OF_YEAR, -(w * 7 + 6))
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }
-            val weekEnd = Calendar.getInstance().apply {
-                timeInMillis = System.currentTimeMillis()
-                add(Calendar.DAY_OF_YEAR, -(w * 7))
-                set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
-            }
-            val label = "W${4 - w}"
-            val sum = expenses
-                .filter { it.type == "EXPENSE" && it.date in weekStart.timeInMillis..weekEnd.timeInMillis }
-                .sumOf { it.amount }
-            result.add(label to sum)
-        }
-        result
-    }
+    val snapshot by viewModel.analyticsSnapshot.collectAsState()
 
-    val totalSpent = remember(expenses) { expenses.filter { it.type == "EXPENSE" }.sumOf { it.amount } }
-
-    val categoryData = remember(expenses) {
-        expenses.filter { it.type == "EXPENSE" }
-            .groupBy { it.category }
-            .map { (cat, list) -> cat to list.sumOf { it.amount } }
-            .sortedByDescending { it.second }
-    }
-
-    val topCategory = remember(categoryData) { categoryData.firstOrNull() }
-
-
-    val daysSinceFirst = remember(expenses) {
-        val expenseList = expenses.filter { it.type == "EXPENSE" }
-        if (expenseList.isEmpty()) 1
-        else {
-            val earliest = expenseList.minOf { it.date }
-            val diff = System.currentTimeMillis() - earliest
-            maxOf(1, (diff / (1000L * 60 * 60 * 24)).toInt())
-        }
-    }
-    val dailyAvg = remember(totalSpent, daysSinceFirst) { totalSpent / daysSinceFirst }
-
-
-    val last7DaysData = remember(expenses) {
-        val cal = Calendar.getInstance()
-        val today = cal.clone() as Calendar
-        today.set(Calendar.HOUR_OF_DAY, 23); today.set(Calendar.MINUTE, 59); today.set(Calendar.SECOND, 59)
-
-        val result = mutableListOf<Pair<String, Double>>()
-        val dayFormat = SimpleDateFormat("EEE", Locale.US)
-        for (i in 6 downTo 0) {
-            val dayStart = (cal.clone() as Calendar).apply {
-                timeInMillis = System.currentTimeMillis()
-                add(Calendar.DAY_OF_YEAR, -i)
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }
-            val dayEnd = (dayStart.clone() as Calendar).apply {
-                set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59)
-            }
-            val label = dayFormat.format(Date(dayStart.timeInMillis))
-            val sum = expenses
-                .filter { it.type == "EXPENSE" && it.date in dayStart.timeInMillis..dayEnd.timeInMillis }
-                .sumOf { it.amount }
-            result.add(label to sum)
-        }
-        result
-    }
+    val last7DaysData = snapshot?.last7DaysData ?: emptyList()
+    val last4WeeksData = snapshot?.last4WeeksData ?: emptyList()
+    val totalSpent = snapshot?.totalSpent ?: 0.0
+    val categoryData = snapshot?.categoryData ?: emptyList()
+    val topCategory = categoryData.firstOrNull()
+    val dailyAvg = snapshot?.dailyAvg ?: 0.0
 
     val chartData = remember(isWeekSelected, last7DaysData, last4WeeksData) {
         if (isWeekSelected) last7DaysData else last4WeeksData
@@ -3943,6 +3897,11 @@ private fun InsightRow(
 }
 
 
+data class HistorySnapshot(
+    val filteredExpenses: List<Expense>,
+    val groupedExpenses: Map<String, List<Expense>>
+)
+
 @Composable
 fun HistoryTab(
     viewModel: MainViewModel,
@@ -3990,86 +3949,86 @@ fun HistoryTab(
         listOf("All") + baseExpenses.map { it.category }.distinct()
     }
 
-    val filteredExpenses = remember(searchQuery, selectedCategory, dateFilter, amountFilter, sortBy, baseExpenses, historyCustomStartDate, historyCustomEndDate) {
+    val historySnapshot by produceState(initialValue = HistorySnapshot(emptyList(), emptyMap()), searchQuery, selectedCategory, dateFilter, amountFilter, sortBy, baseExpenses, historyCustomStartDate, historyCustomEndDate, groupByOption) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            
+            val weekStart = Calendar.getInstance().apply {
+                set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
 
-        val todayStart = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        
-        val weekStart = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
+            val monthStart = Calendar.getInstance().apply {
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
 
-        val monthStart = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-
-        baseExpenses.filter { expense ->
-            val matchesSearch = expense.description.contains(searchQuery, ignoreCase = true) ||
-                    expense.category.contains(searchQuery, ignoreCase = true)
-            val matchesCategory = selectedCategory == "All" || expense.category == selectedCategory
-            val matchesDate = when (dateFilter) {
-                "today" -> expense.date >= todayStart
-                "week" -> expense.date >= weekStart
-                "month" -> expense.date >= monthStart
-                "custom" -> {
-                    val start = if (historyCustomStartDate > 0L) historyCustomStartDate else 0L
-                    val end = if (historyCustomEndDate > 0L) historyCustomEndDate else Long.MAX_VALUE
-                    expense.date in start..end
-                }
-                else -> true
-            }
-            val matchesAmount = when (amountFilter) {
-                "low" -> expense.amount < 500.0
-                "medium" -> expense.amount in 500.0..2000.0
-                "high" -> expense.amount > 2000.0
-                else -> true
-            }
-            matchesSearch && matchesCategory && matchesDate && matchesAmount
-        }.sortedWith { a, b ->
-            when (sortBy) {
-                "date_asc" -> a.date.compareTo(b.date)
-                "amount_desc" -> b.amount.compareTo(a.amount)
-                "amount_asc" -> a.amount.compareTo(b.amount)
-                else -> b.date.compareTo(a.date)
-            }
-        }
-    }
-
-    val groupedExpenses = remember(filteredExpenses, groupByOption) {
-        if (groupByOption == "none") {
-            emptyMap<String, List<Expense>>()
-        } else {
-            val displaySdf = if (groupByOption == "weekly") {
-                SimpleDateFormat("'Week of' MMM dd, yyyy", Locale.US)
-            } else if (groupByOption == "yearly") {
-                SimpleDateFormat("yyyy", Locale.US)
-            } else {
-                SimpleDateFormat("MMMM yyyy", Locale.US)
-            }
-
-            filteredExpenses.groupBy { expense ->
-                if (groupByOption == "weekly") {
-                    val cal = Calendar.getInstance().apply {
-                        timeInMillis = expense.date
-                        set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            val filtered = baseExpenses.filter { expense ->
+                val matchesSearch = expense.description.contains(searchQuery, ignoreCase = true) ||
+                        expense.category.contains(searchQuery, ignoreCase = true)
+                val matchesCategory = selectedCategory == "All" || expense.category == selectedCategory
+                val matchesDate = when (dateFilter) {
+                    "today" -> expense.date >= todayStart
+                    "week" -> expense.date >= weekStart
+                    "month" -> expense.date >= monthStart
+                    "custom" -> {
+                        val start = if (historyCustomStartDate > 0L) historyCustomStartDate else 0L
+                        val end = if (historyCustomEndDate > 0L) historyCustomEndDate else Long.MAX_VALUE
+                        expense.date in start..end
                     }
-                    displaySdf.format(cal.time)
-                } else {
-                    displaySdf.format(Date(expense.date))
+                    else -> true
+                }
+                val matchesAmount = when (amountFilter) {
+                    "low" -> expense.amount < 500.0
+                    "medium" -> expense.amount in 500.0..2000.0
+                    "high" -> expense.amount > 2000.0
+                    else -> true
+                }
+                matchesSearch && matchesCategory && matchesDate && matchesAmount
+            }.sortedWith { a, b ->
+                when (sortBy) {
+                    "date_asc" -> a.date.compareTo(b.date)
+                    "amount_desc" -> b.amount.compareTo(a.amount)
+                    "amount_asc" -> a.amount.compareTo(b.amount)
+                    else -> b.date.compareTo(a.date)
                 }
             }
+
+            val grouped = if (groupByOption == "none") {
+                emptyMap()
+            } else {
+                val displaySdf = if (groupByOption == "weekly") {
+                    SimpleDateFormat("'Week of' MMM dd, yyyy", Locale.US)
+                } else if (groupByOption == "yearly") {
+                    SimpleDateFormat("yyyy", Locale.US)
+                } else {
+                    SimpleDateFormat("MMMM yyyy", Locale.US)
+                }
+
+                filtered.groupBy { expense ->
+                    if (groupByOption == "weekly") {
+                        val cal = Calendar.getInstance().apply {
+                            timeInMillis = expense.date
+                            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                        }
+                        displaySdf.format(cal.time)
+                    } else {
+                        displaySdf.format(Date(expense.date))
+                    }
+                }
+            }
+            HistorySnapshot(filtered, grouped)
         }
     }
 
@@ -4504,7 +4463,7 @@ fun HistoryTab(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(categories) { cat ->
+                                items(categories, key = { it }) { cat ->
                                     val isSelected = selectedCategory == cat
                                     Box(
                                         modifier = Modifier
@@ -4532,7 +4491,7 @@ fun HistoryTab(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(bottom = bottomPadding)
             ) {
-                if (filteredExpenses.isEmpty()) {
+                if (historySnapshot.filteredExpenses.isEmpty()) {
                     item {
                         Card(
                             shape = RoundedCornerShape(24.dp),
@@ -4549,7 +4508,7 @@ fun HistoryTab(
                     }
                 } else {
                     if (groupByOption == "none") {
-                        items(filteredExpenses, key = { it.id }) { expense ->
+                        items(historySnapshot.filteredExpenses, key = { it.id }) { expense ->
                             ExpenseItem(
                                 expense = expense,
                                 accounts = accounts,
@@ -4557,7 +4516,7 @@ fun HistoryTab(
                             )
                         }
                     } else {
-                        for (entry in groupedExpenses.entries) {
+                        for (entry in historySnapshot.groupedExpenses.entries) {
                             val groupLabel = entry.key
                             val groupList = entry.value
                             val netSubtotal = groupList.sumOf { exp ->
@@ -4665,7 +4624,7 @@ fun HistoryTab(
                         }
                     }
                 } else {
-                    items(plannedTransactions) { planned ->
+                    items(plannedTransactions, key = { it.id }) { planned ->
                         val now = System.currentTimeMillis()
                         val isOverdue = planned.nextDueDate < now && planned.isActive
                         val accountName = accounts.find { it.id == planned.accountId }?.name ?: "Unassigned"
@@ -6046,22 +6005,51 @@ fun ProfileTab(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Copyright,
-                    contentDescription = "Copyright",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(12.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Copyright,
+                        contentDescription = "Copyright",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    val copyrightText = buildAnnotatedString {
+                        append("Copyright ")
+                        pushStringAnnotation(tag = "URL", annotation = "https://neosparkx.com")
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = PrimaryAccent)) {
+                            append("NeoSparkX")
+                        }
+                        pop()
+                        append(". All rights reserved.")
+                    }
+                    ClickableText(
+                        text = copyrightText,
+                        style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary),
+                        onClick = { offset ->
+                            copyrightText.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                                .firstOrNull()?.let { annotation ->
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item))
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                        }
+                    )
+                }
                 Text(
-                    text = "Copyright Azwad Abrar. All rights reserved.",
+                    text = "v${com.example.BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
+                    color = TextSecondary.copy(alpha = 0.8f)
                 )
             }
         }
@@ -6477,3 +6465,24 @@ private fun NotificationCard(item: NotificationItem) {
         }
     }
 }
+
+@Composable
+fun TabContent(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val hasBeenVisible = remember { mutableStateOf(false) }
+    if (visible) {
+        hasBeenVisible.value = true
+    }
+    if (hasBeenVisible.value) {
+        Box(
+            modifier = modifier
+                .then(if (visible) Modifier.fillMaxSize() else Modifier.size(0.dp))
+        ) {
+            content()
+        }
+    }
+}
+

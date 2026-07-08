@@ -376,7 +376,7 @@ fun AddPlannedTransactionDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(quickCategories) { catName ->
+                        items(quickCategories, key = { it }) { catName ->
                             val isSelected = category.trim().lowercase(Locale.US) == catName.trim().lowercase(Locale.US)
                             val chipSelectedColor = if (transactionType == "EXPENSE") Color(0xFFEA3B35) else Color(0xFF4CAF50)
                             FilterChip(

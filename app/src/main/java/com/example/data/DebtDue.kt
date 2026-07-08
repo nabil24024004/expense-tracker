@@ -14,5 +14,6 @@ data class DebtDue(
     val type: String, // "DEBT" (owed to others) or "DUE" (owed to me)
     val isCleared: Boolean = false,
     val isSynced: Boolean = false,
-    val sheetRow: Int? = null
+    val sheetRow: Int? = null,
+    val accountId: Int? = null
 )

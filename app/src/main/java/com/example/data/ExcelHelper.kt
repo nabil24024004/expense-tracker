@@ -52,21 +52,6 @@ object ExcelHelper {
         val rawPlanned: List<RawPlannedImport>
     )
 
-    // Legacy method for backward compatibility / tests
-    fun importExpenses(inputStream: InputStream): List<Expense> {
-        val data = importAllData(inputStream)
-        return data.rawExpenses.map { raw ->
-            Expense(
-                amount = raw.amount,
-                description = raw.description,
-                category = raw.category,
-                date = raw.date,
-                type = raw.type,
-                tags = raw.tags
-            )
-        }
-    }
-
     // New unified import method
     fun importAllData(inputStream: InputStream): AppImportData {
         val accounts = mutableListOf<Account>()

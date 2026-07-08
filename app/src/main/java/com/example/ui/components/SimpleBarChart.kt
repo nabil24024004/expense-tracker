@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -30,13 +31,23 @@ fun SimpleBarChart(
     val slate = Color(0xFF94A3B8)
     val cardSurface = CardSurface
     
-    val colors = listOf(
-        accent,
-        textPrimary,
-        textSecondary,
-        slate,
-        cardSurface
-    )
+    val colors = remember(accent, textPrimary, textSecondary, slate, cardSurface) {
+        listOf(
+            accent,
+            textPrimary,
+            textSecondary,
+            slate,
+            cardSurface
+        )
+    }
+
+    val barBrushes = remember(colors) {
+        colors.map { color ->
+            Brush.verticalGradient(
+                colors = listOf(color, color.copy(alpha = 0.85f))
+            )
+        }
+    }
 
     val trackColor = CardSurface
 
@@ -52,7 +63,7 @@ fun SimpleBarChart(
         data.forEachIndexed { index, (_, value) ->
             val barHeight = (value / safeMax * height).toFloat()
             val safeBarHeight = if (barHeight.isNaN() || barHeight < 0f) 0f else barHeight
-            val color = colors[index % colors.size]
+            val brush = barBrushes[index % barBrushes.size]
             
 
             drawRoundRect(
@@ -64,9 +75,7 @@ fun SimpleBarChart(
             
 
             drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(color, color.copy(alpha = 0.85f))
-                ),
+                brush = brush,
                 topLeft = Offset(currentX, height - safeBarHeight),
                 size = Size(barWidth, safeBarHeight),
                 cornerRadius = CornerRadius(12f, 12f)

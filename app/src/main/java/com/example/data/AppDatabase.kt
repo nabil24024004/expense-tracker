@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Expense::class, DebtDue::class, Account::class, PlannedTransaction::class], version = 4, exportSchema = false)
+@Database(entities = [Expense::class, DebtDue::class, Account::class, PlannedTransaction::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun debtDueDao(): DebtDueDao
@@ -97,9 +97,10 @@ abstract class AppDatabase : RoomDatabase() {
         private val CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
+                // Insert Cash with a fixed id=1 so the ViewModel seed check is always consistent
                 db.execSQL("""
-                    INSERT INTO `accounts` (`name`, `balance`, `colorHex`, `icon`, `currency`, `includeInBalance`, `displayOrder`) 
-                    VALUES ('Cash', 0.0, '#EA3B35', 'wallet', '৳', 1, 0)
+                    INSERT INTO `accounts` (`id`, `name`, `balance`, `colorHex`, `icon`, `currency`, `includeInBalance`, `displayOrder`) 
+                    VALUES (1, 'Cash', 0.0, '#EA3B35', 'wallet', '৳', 1, 0)
                 """.trimIndent())
             }
         }

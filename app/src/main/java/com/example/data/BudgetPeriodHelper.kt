@@ -20,6 +20,7 @@ object BudgetPeriodHelper {
         return when (periodType) {
             "weekly" -> {
                 val start = Calendar.getInstance().apply {
+                    firstDayOfWeek = Calendar.SUNDAY
                     set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
                     set(Calendar.HOUR_OF_DAY, 0)
                     set(Calendar.MINUTE, 0)

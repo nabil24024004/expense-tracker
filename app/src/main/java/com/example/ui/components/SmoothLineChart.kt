@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import android.graphics.Paint
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 
 @Composable
 fun SmoothLineChart(
@@ -31,6 +33,32 @@ fun SmoothLineChart(
     val minVal = data.minOfOrNull { it.second } ?: 0.0
     val safeMax = if (maxVal == minVal) maxVal + 1.0 else maxVal
     val range = safeMax - minVal
+
+    val density = LocalDensity.current
+    
+    val tooltipPaint = remember(dotColor) {
+        Paint().apply {
+            color = dotColor.toArgb()
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+    }
+    
+    val tooltipTextPaint = remember(dotColor, density) {
+        Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = with(density) { 9.dp.toPx() }
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+    }
+
+    val chartStroke = remember(density) {
+        Stroke(width = with(density) { 3.dp.toPx() })
+    }
+
+    val path = remember { Path() }
 
     Canvas(modifier = modifier.fillMaxWidth().height(160.dp)) {
         val width = size.width
@@ -61,7 +89,7 @@ fun SmoothLineChart(
         }
 
         if (points.isNotEmpty()) {
-            val path = Path()
+            path.reset()
             path.moveTo(points.first().x, points.first().y)
 
             for (i in 0 until points.size - 1) {
@@ -77,7 +105,7 @@ fun SmoothLineChart(
             drawPath(
                 path = path,
                 color = lineColor,
-                style = Stroke(width = 3.dp.toPx())
+                style = chartStroke
             )
 
 
@@ -104,21 +132,7 @@ fun SmoothLineChart(
 
                     if (drawTooltip) {
                         drawIntoCanvas { canvas ->
-                            val paint = Paint().apply {
-                                color = dotColor.toArgb()
-                                style = Paint.Style.FILL
-                                isAntiAlias = true
-                            }
-                            val textPaint = Paint().apply {
-                                color = android.graphics.Color.WHITE
-                                textSize = 9.dp.toPx()
-                                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                                isAntiAlias = true
-                                textAlign = Paint.Align.CENTER
-                            }
-
-                            val tooltipText = "৳${String.format(java.util.Locale.US, "%.0f", amount)}"
-                            val rectWidth = textPaint.measureText(tooltipText) + 12.dp.toPx()
+                            val rectWidth = tooltipTextPaint.measureText("৳${String.format(java.util.Locale.US, "%.0f", amount)}") + 12.dp.toPx()
                             val rectHeight = 16.dp.toPx()
 
                             val rx = dotPoint.x
@@ -132,15 +146,15 @@ fun SmoothLineChart(
                                 ry + rectHeight / 2f,
                                 4.dp.toPx(),
                                 4.dp.toPx(),
-                                paint
+                                tooltipPaint
                             )
 
 
                             canvas.nativeCanvas.drawText(
-                                tooltipText,
+                                "৳${String.format(java.util.Locale.US, "%.0f", amount)}",
                                 rx,
                                 ry + rectHeight / 4f,
-                                textPaint
+                                tooltipTextPaint
                             )
                         }
                     }

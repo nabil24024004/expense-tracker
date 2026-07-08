@@ -26,4 +26,8 @@ interface ExpenseDao {
 
     @Query("SELECT * FROM expenses WHERE isSynced = 0")
     suspend fun getUnsyncedExpenses(): List<Expense>
+
+    /** Re-points all transactions from a deleted duplicate account to the surviving account. */
+    @Query("UPDATE expenses SET accountId = :newId WHERE accountId = :oldId")
+    suspend fun reassignAccountId(oldId: Int, newId: Int)
 }
