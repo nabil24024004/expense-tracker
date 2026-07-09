@@ -1,8 +1,8 @@
-# Expense Tracker (v5.0.0) 📱💰
+# Expense Tracker (v1.0.0) 📱💰
 
-[![Kotlin Version](https://img.shields.io/badge/Kotlin-1.9.0-purple.svg)](https://kotlinlang.org/)
+[![Kotlin Version](https://img.shields.io/badge/Kotlin-2.2.10-purple.svg)](https://kotlinlang.org/)
 [![UI Framework](https://img.shields.io/badge/Compose-Jetpack-blue.svg)](https://developer.android.com/jetpack/compose)
-[![Database](https://img.shields.io/badge/Room-v2.6.0-green.svg)](https://developer.android.com/training/data-storage/room)
+[![Database](https://img.shields.io/badge/Room-v2.7.0-green.svg)](https://developer.android.com/training/data-storage/room)
 [![Security](https://img.shields.io/badge/Biometric-Secured-darkgreen.svg)](https://developer.android.com/training/sign-in/biometrics)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 

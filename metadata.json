@@ -1,6 +1,6 @@
 {
   "name": "Expense Tracker",
-  "description": "Track monthly expenses with Google Sheets sync, interactive charts, and biometric security.",
+  "description": "Track monthly expenses with interactive charts, local database management, and biometric security.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

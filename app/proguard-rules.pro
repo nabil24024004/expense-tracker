@@ -1,21 +1,29 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Project-specific ProGuard/R8 rules.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Room compiler rules
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.room.RoomDatabase
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Apache POI rules for Excel import/export
+-keep class org.apache.poi.** { *; }
+-dontwarn org.apache.poi.**
+-keep class org.openxmlformats.schemas.** { *; }
+-dontwarn org.openxmlformats.schemas.**
+-keep class org.apache.xmlbeans.** { *; }
+-dontwarn org.apache.xmlbeans.**
+-keep class com.microsoft.schemas.** { *; }
+-dontwarn com.microsoft.schemas.**
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep original line number information for debugging stack traces
+-keepattributes SourceFile,LineNumberTable
+
+# Ignore missing AWT classes referenced by Apache POI / graph libraries
+-dontwarn java.awt.**
+-dontwarn javax.xml.stream.**
+
+# Ignore missing OSGi framework classes referenced by Log4j / Apache POI
+-dontwarn org.osgi.framework.**
+-dontwarn org.apache.logging.log4j.**
+
+# Ignore missing graphbuilder classes
+-dontwarn com.graphbuilder.**

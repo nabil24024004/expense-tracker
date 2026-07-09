@@ -2,14 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <permission
+        android:name="com.neosparkx.expensetracker.NOTIFICATION_PERMISSION"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.neosparkx.expensetracker.NOTIFICATION_PERMISSION" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
@@ -22,16 +22,17 @@
         android:theme="@style/Theme.MyApplication">
         
         <receiver 
-            android:name=".NotificationReceiver" 
+            android:name="com.neosparkx.expensetracker.NotificationReceiver" 
             android:enabled="true"
-            android:exported="true">
+            android:exported="true"
+            android:permission="com.neosparkx.expensetracker.NOTIFICATION_PERMISSION">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.neosparkx.expensetracker.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication">

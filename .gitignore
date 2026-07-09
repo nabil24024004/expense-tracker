@@ -17,3 +17,7 @@ local.properties
 .env
 debug.keystore
 firebase-applet-config.json
+
+# Keystores and signing keys
+*.jks
+*.keystore

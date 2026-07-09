@@ -7,7 +7,7 @@
 **Platform:** Mobile Application (Android App)  
 
 ## Overview
-[Expense Tracker (v5.0.0)](file:///d:/expense-tracker/README.md) is a premium, offline-first personal finance and wealth management application developed natively for the Android platform. By running 100% locally and device-bound, it guarantees absolute privacy for the user's financial ledger. The application allows users to orchestrate their budgets, manage multiple accounts/wallets (like Cash, Credit Cards, Bank Accounts, and Savings), log transactions with an integrated arithmetic calculator, track loans and borrowing, and schedule recurring expenses or income. 
+[Expense Tracker (v1.0.0)](file:///d:/expense-tracker/README.md) is a premium, offline-first personal finance and wealth management application developed natively for the Android platform. By running 100% locally and device-bound, it guarantees absolute privacy for the user's financial ledger. The application allows users to orchestrate their budgets, manage multiple accounts/wallets (like Cash, Credit Cards, Bank Accounts, and Savings), log transactions with an integrated arithmetic calculator, track loans and borrowing, and schedule recurring expenses or income. 
 
 The application is built on modern Android development standards, utilizing Jetpack Compose for reactive, declarative layouts, Kotlin Coroutines & Flow for asynchronous stream handling, Room Database for persistent storage, and local biometric sensors for hardware-level app lock security.
 
