@@ -371,8 +371,8 @@ fun HomeScreen(viewModel: MainViewModel, activity: FragmentActivity) {
                 AddDebtDueDialog(
                     onDismiss = { showAddDebtDueDialog = false },
                     accounts = accounts,
-                    onConfirm = { name, amt, desc, type, dueDate, accountId ->
-                        viewModel.addDebtDue(name, amt, desc, type, dueDate, accountId)
+                    onConfirm = { name, amt, desc, type, dueDate, accountId, addToAccountNow ->
+                        viewModel.addDebtDue(name, amt, desc, type, dueDate, accountId, addToAccountNow)
                         showAddDebtDueDialog = false
                     }
                 )

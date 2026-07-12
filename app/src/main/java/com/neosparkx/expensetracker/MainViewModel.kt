@@ -671,7 +671,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Debts & Dues settlement
-    fun addDebtDue(personName: String, amount: Double, description: String, type: String, dueDate: Long?, accountId: Int?) {
+    fun addDebtDue(
+        personName: String,
+        amount: Double,
+        description: String,
+        type: String,
+        dueDate: Long?,
+        accountId: Int?,
+        addToAccountNow: Boolean = false
+    ) {
         viewModelScope.launch {
             val date = System.currentTimeMillis()
             val newDebtDue = DebtDue(
@@ -685,11 +693,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             debtDueRepository.insert(newDebtDue)
 
-            // Adjust account balance
-            accountId?.let { accId ->
-                accountRepository.getById(accId)?.let { acc ->
-                    val balanceDiff = if (type == "DEBT") amount else -amount
-                    accountRepository.update(acc.copy(balance = acc.balance + balanceDiff))
+            // Optionally log a real transaction so the account balance is updated
+            // through the proper expense/income history (not a raw balance mutation)
+            if (addToAccountNow && accountId != null) {
+                if (type == "DEBT") {
+                    // I borrowed money — it's an income into my account
+                    addExpense(
+                        amount = amount,
+                        description = "Debt received from: $personName ($description)",
+                        category = "Debt Received",
+                        type = "INCOME",
+                        accountId = accountId
+                    )
+                } else {
+                    // I lent money — it's an expense out of my account
+                    addExpense(
+                        amount = amount,
+                        description = "Lent to: $personName ($description)",
+                        category = "Debt Lent",
+                        type = "EXPENSE",
+                        accountId = accountId
+                    )
                 }
             }
         }
@@ -729,14 +753,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteDebtDue(id: Int) {
         viewModelScope.launch {
-            val list = debtsDues.value
-            val item = list.find { it.id == id }
-            if (item != null && !item.isCleared && item.accountId != null) {
-                accountRepository.getById(item.accountId)?.let { acc ->
-                    val balanceDiff = if (item.type == "DEBT") -item.amount else item.amount
-                    accountRepository.update(acc.copy(balance = acc.balance + balanceDiff))
-                }
-            }
+            // No balance reversal needed: account balances are only affected via
+            // logged income/expense transactions (at creation with addToAccountNow=true,
+            // or at settlement). Those individual transactions can be deleted separately.
             debtDueRepository.delete(id)
         }
     }

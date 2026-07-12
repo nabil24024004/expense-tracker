@@ -35,7 +35,7 @@ import androidx.compose.material.icons.rounded.ArrowDropDown
 fun AddDebtDueDialog(
     onDismiss: () -> Unit,
     accounts: List<Account> = emptyList(),
-    onConfirm: (personName: String, amount: Double, description: String, type: String, dueDate: Long?, accountId: Int?) -> Unit
+    onConfirm: (personName: String, amount: Double, description: String, type: String, dueDate: Long?, accountId: Int?, addToAccountNow: Boolean) -> Unit
 ) {
     var personName by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
@@ -47,6 +47,7 @@ fun AddDebtDueDialog(
     val selectedAccount = remember(selectedAccountId, accounts) {
         accounts.find { it.id == selectedAccountId }
     }
+    var addToAccountNow by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
@@ -234,7 +235,45 @@ fun AddDebtDueDialog(
                     }
                 }
 
-                // Due Date Field (Clickable)
+                // Add-to-account toggle (only visible when an account is selected)
+                if (accounts.isNotEmpty() && selectedAccountId != null) {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { addToAccountNow = !addToAccountNow }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (type == "DEBT") "Add amount to account now?" else "Deduct amount from account now?",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = if (type == "DEBT") "Record as income (you already received the money)" else "Record as expense (you already paid the money)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            Switch(
+                                checked = addToAccountNow,
+                                onCheckedChange = { addToAccountNow = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = PrimaryAccent,
+                                    uncheckedThumbColor = TextSecondary,
+                                    uncheckedTrackColor = ThemeBackground,
+                                    uncheckedBorderColor = CardSurface
+                                )
+                            )
+                        }
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -287,7 +326,7 @@ fun AddDebtDueDialog(
                             val amt = amount.toDoubleOrNull() ?: 0.0
                             if (amt > 0 && personName.trim().isNotEmpty()) {
                                 val finalDescription = if (description.trim().isEmpty()) "Debt/Receivable log" else description.trim()
-                                onConfirm(personName.trim(), amt, finalDescription, type, dueDateMs, selectedAccountId)
+                                onConfirm(personName.trim(), amt, finalDescription, type, dueDateMs, selectedAccountId, addToAccountNow)
                             }
                         },
                         modifier = Modifier.testTag("save_debt_button"),
