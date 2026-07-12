@@ -29,6 +29,10 @@ import java.util.*
 
 import com.neosparkx.expensetracker.data.Account
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import com.neosparkx.expensetracker.ui.components.AutoScaleText
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,7 +110,7 @@ fun AddDebtDueDialog(
                         .padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    val types = listOf("DEBT" to "I Owe (Debt)", "DUE" to "Owed to Me (Receivable)")
+                    val types = listOf("DEBT" to "I Owe (Debt)", "DUE" to "Owed to Me (Due)")
                     types.forEach { (typeKey, typeLabel) ->
                         val isSelected = type == typeKey
                         Box(
@@ -120,11 +124,13 @@ fun AddDebtDueDialog(
                                 .clickable { type = typeKey },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
+                            AutoScaleText(
                                 text = typeLabel,
                                 color = if (isSelected) Color.White else TextSecondary,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                                style = TextStyle(fontSize = 13.sp),
+                                maxLines = 1,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }

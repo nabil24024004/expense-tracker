@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.neosparkx.expensetracker.ui.screens
 
 import com.neosparkx.expensetracker.data.Account
@@ -76,6 +78,8 @@ import com.neosparkx.expensetracker.data.DebtDue
 import com.neosparkx.expensetracker.data.BudgetPeriodHelper
 import com.neosparkx.expensetracker.ui.components.SimpleBarChart
 import com.neosparkx.expensetracker.ui.components.SmoothLineChart
+import com.neosparkx.expensetracker.ui.components.AutoScaleText
+import androidx.compose.ui.text.TextStyle
 import com.neosparkx.expensetracker.ui.theme.*
 import com.neosparkx.expensetracker.data.ExcelHelper
 import com.neosparkx.expensetracker.data.PdfHelper
@@ -2521,10 +2525,12 @@ fun AnalyticsTab(
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
+                        AutoScaleText(
                             text = tabLabel,
                             color = if (active) TextPrimary else TextSecondary,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -4056,11 +4062,13 @@ fun HistoryTab(
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
+                    AutoScaleText(
                         text = secLabel,
                         color = if (isSelected) Color.White else TextSecondary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        style = TextStyle(fontSize = 12.sp),
+                        maxLines = 1,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -5698,7 +5706,10 @@ fun ProfileTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(Icons.Rounded.Fingerprint, "Biometric", tint = PrimaryAccent, modifier = Modifier.size(28.dp))
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -5736,7 +5747,10 @@ fun ProfileTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(Icons.Rounded.VisibilityOff, "Hide Balance", tint = PrimaryAccent, modifier = Modifier.size(28.dp))
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -5774,7 +5788,10 @@ fun ProfileTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(Icons.Rounded.RemoveRedEye, "Hide Income", tint = PrimaryAccent, modifier = Modifier.size(28.dp))
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -5971,10 +5988,10 @@ fun ProfileTab(
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         TextButton(
                             onClick = {
@@ -6001,16 +6018,11 @@ fun ProfileTab(
                                     text = "GitHub",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = PrimaryAccent
+                                    color = PrimaryAccent,
+                                    maxLines = 1
                                 )
                             }
                         }
-
-                        Box(
-                            modifier = Modifier
-                                .size(width = 1.dp, height = 12.dp)
-                                .background(ThemeBackground)
-                        )
 
                         TextButton(
                             onClick = {
@@ -6037,16 +6049,11 @@ fun ProfileTab(
                                     text = "Portfolio",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = PrimaryAccent
+                                    color = PrimaryAccent,
+                                    maxLines = 1
                                 )
                             }
                         }
-
-                        Box(
-                            modifier = Modifier
-                                .size(width = 1.dp, height = 12.dp)
-                                .background(ThemeBackground)
-                        )
 
                         TextButton(
                             onClick = {
@@ -6075,7 +6082,8 @@ fun ProfileTab(
                                     text = "Contact",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = PrimaryAccent
+                                    color = PrimaryAccent,
+                                    maxLines = 1
                                 )
                             }
                         }

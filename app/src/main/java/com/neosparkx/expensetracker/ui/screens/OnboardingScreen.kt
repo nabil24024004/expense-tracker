@@ -689,6 +689,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
+                                modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
