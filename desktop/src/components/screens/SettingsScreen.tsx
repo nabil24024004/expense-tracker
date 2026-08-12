@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Settings, Lock, Database, CheckCircle2, User, Trash2, Coins } from 'lucide-react';
+import { Settings, Lock, Database, CheckCircle2, User, Trash2, Coins, Sparkles } from 'lucide-react';
 
 export const SettingsScreen: React.FC = () => {
   const {
@@ -12,7 +12,8 @@ export const SettingsScreen: React.FC = () => {
     setPinLock,
     clearAllData,
     setIsExportImportOpen,
-    requestDeleteConfirmation
+    requestDeleteConfirmation,
+    resetOnboarding
   } = useApp();
 
   const [nameInput, setNameInput] = useState<string>(userName);
@@ -246,6 +247,14 @@ export const SettingsScreen: React.FC = () => {
           >
             <Database className="w-4 h-4" />
             <span>Open Data Sync & Backup Center</span>
+          </button>
+
+          <button
+            onClick={resetOnboarding}
+            className="py-3 px-4 rounded-xl bg-sub-surface hover:bg-theme-main text-primary-var border border-theme text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-[#EA3B35]" />
+            <span>Re-run Onboarding Tour</span>
           </button>
 
           <button

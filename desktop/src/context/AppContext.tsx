@@ -55,6 +55,8 @@ interface AppContextType {
   selectedAccountForDetails: Account | null;
   isExportImportOpen: boolean;
   setSelectedAccountForDetails: (account: Account | null) => void;
+  completeOnboarding: (name: string, currency: string, initialWallet?: { name: string; bankName: string; cardType: any; startingBalance: number }) => void;
+  resetOnboarding: () => void;
 
   // State Setters & Actions
   setActiveTab: (tab: string) => void;
@@ -162,6 +164,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     return !!settings.pinLock;
+  });
+
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(() => {
+    return localStorage.getItem('et_desktop_onboarding_completed') === 'true';
   });
 
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -511,6 +517,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomCategories(prev => prev.filter(c => c.id !== id));
   };
 
+  const completeOnboarding = (
+    name: string,
+    currency: string,
+    initialWallet?: { name: string; bankName: string; cardType: any; startingBalance: number }
+  ) => {
+    setUserNameState(name);
+    localStorage.setItem('et_desktop_username', name);
+    setSettings(prev => ({ ...prev, currency }));
+
+    if (initialWallet && initialWallet.name.trim()) {
+      addAccount({
+        name: initialWallet.name.trim(),
+        bankName: initialWallet.bankName.trim() || 'Primary Bank',
+        cardType: initialWallet.cardType || 'bank',
+        startingBalance: Number(initialWallet.startingBalance) || 0,
+        colorHex: '#EA3B35',
+        isExcluded: false
+      });
+    }
+
+    localStorage.setItem('et_desktop_onboarding_completed', 'true');
+    setHasCompletedOnboarding(true);
+    triggerConfetti();
+  };
+
+  const resetOnboarding = () => {
+    localStorage.removeItem('et_desktop_onboarding_completed');
+    setHasCompletedOnboarding(false);
+  };
+
   const importBackupData = (backup: ExpenseTrackerBackup) => {
     if (backup.accounts) setAccounts(backup.accounts);
     if (backup.expenses) setExpenses(backup.expenses);
@@ -529,6 +565,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('et_desktop_expenses');
     localStorage.removeItem('et_desktop_planned');
     localStorage.removeItem('et_desktop_debts');
+    localStorage.removeItem('et_desktop_onboarding_completed');
+    setHasCompletedOnboarding(false);
   };
 
   return (
@@ -545,6 +583,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeTab,
         userName,
         isLocked,
+        hasCompletedOnboarding,
         confirmDeleteModal,
         isAddExpenseOpen,
         isAddAccountOpen,
@@ -593,6 +632,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         customCategories,
         addCustomCategory,
         deleteCustomCategory,
+        completeOnboarding,
+        resetOnboarding,
         importBackupData,
         clearAllData,
         triggerConfetti

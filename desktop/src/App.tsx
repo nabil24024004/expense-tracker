@@ -22,9 +22,14 @@ import { ExportImportModal } from './components/modals/ExportImportModal';
 import { SecurityLockModal } from './components/modals/SecurityLockModal';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
 import { AccountDetailsModal } from './components/modals/AccountDetailsModal';
+import { OnboardingScreen } from './components/onboarding/OnboardingScreen';
 
 const AppContent: React.FC = () => {
-  const { activeTab, plannedTransactions } = useApp();
+  const { activeTab, plannedTransactions, hasCompletedOnboarding } = useApp();
+
+  if (!hasCompletedOnboarding) {
+    return <OnboardingScreen />;
+  }
 
   React.useEffect(() => {
     if (window.electronAPI && plannedTransactions.length > 0) {
