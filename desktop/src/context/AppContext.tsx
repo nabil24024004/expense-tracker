@@ -41,6 +41,7 @@ interface AppContextType {
   activeTab: string;
   userName: string;
   isLocked: boolean;
+  hasCompletedOnboarding: boolean;
   confirmDeleteModal: ConfirmDeleteOptions | null;
 
   // Modals

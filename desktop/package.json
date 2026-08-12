@@ -12,8 +12,16 @@
     "lint": "oxlint",
     "preview": "vite preview"
   },
+  "build": {
+    "appId": "com.neosparkx.expensetracker.desktop",
+    "productName": "Expense Tracker Desktop",
+    "win": {
+      "icon": "public/icon.png"
+    }
+  },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
+    "gsap": "^3.15.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.31.0",
     "react": "^19.2.8",

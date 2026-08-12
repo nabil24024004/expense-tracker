@@ -1,12 +1,16 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut, Notification, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+// Set App User Model ID for Windows Taskbar Icon identification
+app.setAppUserModelId('com.neosparkx.expensetracker.desktop');
 
 let mainWindow = null;
 let tray = null;
 
 function createWindow() {
-  const iconPath = path.join(__dirname, '../public/icon.png');
+  const iconPath = path.resolve(__dirname, '../public/icon.png');
+  const appIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined;
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -16,7 +20,7 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0C0C0E',
-    icon: fs.existsSync(iconPath) ? iconPath : undefined,
+    icon: appIcon,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -35,6 +39,9 @@ function createWindow() {
   }
 
   mainWindow.once('ready-to-show', () => {
+    if (appIcon && !appIcon.isEmpty()) {
+      mainWindow.setIcon(appIcon);
+    }
     mainWindow.show();
   });
 
