@@ -20,6 +20,7 @@ export const HistoryScreen: React.FC = () => {
   } = useApp();
 
   const [dateRange, setDateRange] = useState<'ALL' | 'THIS_MONTH' | 'LAST_MONTH'>('ALL');
+  const [selectedWalletFilter, setSelectedWalletFilter] = useState<string>('ALL');
 
   const currency = settings.currency || '৳';
   const formatAmount = (num: number) => {
@@ -41,6 +42,10 @@ export const HistoryScreen: React.FC = () => {
     }
 
     if (activeTypeFilter !== 'ALL' && exp.type !== activeTypeFilter) {
+      return false;
+    }
+
+    if (selectedWalletFilter !== 'ALL' && exp.walletId !== selectedWalletFilter) {
       return false;
     }
 
@@ -115,6 +120,18 @@ export const HistoryScreen: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* Wallet Filter */}
+          <select
+            value={selectedWalletFilter}
+            onChange={(e) => setSelectedWalletFilter(e.target.value)}
+            className="bg-sub-surface border border-theme rounded-xl px-3 py-2 text-xs text-primary-var focus:outline-none"
+          >
+            <option value="ALL">All Wallets</option>
+            {accounts.map(acc => (
+              <option key={acc.id} value={acc.id}>{acc.name}</option>
+            ))}
+          </select>
 
           {/* Date Filter */}
           <select

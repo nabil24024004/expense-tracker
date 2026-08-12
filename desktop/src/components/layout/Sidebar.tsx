@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { LayoutDashboard, Wallet, CalendarClock, Scale, History, Settings, Plus, ArrowRightLeft } from 'lucide-react';
+import { LayoutDashboard, Wallet, CalendarClock, Scale, History, Settings, Plus, ArrowRightLeft, BarChart3 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const { activeTab, setActiveTab, setIsAddExpenseOpen, setIsTransferOpen } = useApp();
@@ -8,6 +8,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { id: 'home', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'accounts', label: 'Wallets & Cards', icon: Wallet },
+    { id: 'analytics', label: 'Analytics & Insights', icon: BarChart3 },
     { id: 'planned', label: 'Planned Payments', icon: CalendarClock },
     { id: 'debts', label: 'Debts & Receivables', icon: Scale },
     { id: 'history', label: 'Transaction History', icon: History },

@@ -51,7 +51,9 @@ interface AppContextType {
   isAddDebtOpen: boolean;
   isSettleDebtOpen: boolean;
   selectedDebtForSettle: DebtDue | null;
+  selectedAccountForDetails: Account | null;
   isExportImportOpen: boolean;
+  setSelectedAccountForDetails: (account: Account | null) => void;
 
   // State Setters & Actions
   setActiveTab: (tab: string) => void;
@@ -183,6 +185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAddDebtOpen, setIsAddDebtOpen] = useState<boolean>(false);
   const [isSettleDebtOpen, setIsSettleDebtOpen] = useState<boolean>(false);
   const [selectedDebtForSettle, setSelectedDebtForSettle] = useState<DebtDue | null>(null);
+  const [selectedAccountForDetails, setSelectedAccountForDetails] = useState<Account | null>(null);
   const [isExportImportOpen, setIsExportImportOpen] = useState<boolean>(false);
   const [confirmDeleteModal, setConfirmDeleteModal] = useState<ConfirmDeleteOptions | null>(null);
 
@@ -549,7 +552,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAddDebtOpen,
         isSettleDebtOpen,
         selectedDebtForSettle,
+        selectedAccountForDetails,
         isExportImportOpen,
+        setSelectedAccountForDetails,
         requestDeleteConfirmation,
         closeDeleteConfirmation,
         setActiveTab,

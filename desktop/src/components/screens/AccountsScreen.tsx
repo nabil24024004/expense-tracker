@@ -9,7 +9,8 @@ export const AccountsScreen: React.FC = () => {
     settings,
     setIsAddAccountOpen,
     setIsTransferOpen,
-    requestDeleteConfirmation
+    requestDeleteConfirmation,
+    setSelectedAccountForDetails
   } = useApp();
 
   const currency = settings.currency || '৳';
@@ -98,7 +99,8 @@ export const AccountsScreen: React.FC = () => {
               return (
                 <div
                   key={acc.id}
-                  className="p-5 rounded-2xl bg-card-surface border border-theme hover:border-[#EA3B35]/40 transition-all space-y-4 relative group"
+                  onClick={() => setSelectedAccountForDetails(acc)}
+                  className="p-5 rounded-2xl bg-card-surface border border-theme hover:border-[#EA3B35]/40 transition-all space-y-4 relative group cursor-pointer"
                   style={{ borderTop: `4px solid ${acc.colorHex || '#EA3B35'}` }}
                 >
                   <div className="flex items-start justify-between">
@@ -116,7 +118,8 @@ export const AccountsScreen: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         requestDeleteConfirmation({
                           title: 'Delete Wallet Card',
                           message: `Are you sure you want to delete "${acc.name}"? This action cannot be undone.`,

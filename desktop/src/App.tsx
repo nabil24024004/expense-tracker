@@ -6,6 +6,7 @@ import { Sidebar } from './components/layout/Sidebar';
 
 import { HomeScreen } from './components/screens/HomeScreen';
 import { AccountsScreen } from './components/screens/AccountsScreen';
+import { AnalyticsScreen } from './components/screens/AnalyticsScreen';
 import { PlannedScreen } from './components/screens/PlannedScreen';
 import { DebtsScreen } from './components/screens/DebtsScreen';
 import { HistoryScreen } from './components/screens/HistoryScreen';
@@ -20,14 +21,29 @@ import { SettleDebtModal } from './components/modals/SettleDebtModal';
 import { ExportImportModal } from './components/modals/ExportImportModal';
 import { SecurityLockModal } from './components/modals/SecurityLockModal';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
+import { AccountDetailsModal } from './components/modals/AccountDetailsModal';
 
 const AppContent: React.FC = () => {
-  const { activeTab } = useApp();
+  const { activeTab, plannedTransactions } = useApp();
+
+  React.useEffect(() => {
+    if (window.electronAPI && plannedTransactions.length > 0) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const dueCount = plannedTransactions.filter(p => p.nextDueDate <= todayStr).length;
+      if (dueCount > 0) {
+        window.electronAPI.sendNotification(
+          'Expense Tracker Reminder 🔔',
+          `You have ${dueCount} scheduled payment(s) due or overdue today.`
+        );
+      }
+    }
+  }, []);
 
   const renderActiveScreen = () => {
     switch (activeTab) {
       case 'home': return <HomeScreen />;
       case 'accounts': return <AccountsScreen />;
+      case 'analytics': return <AnalyticsScreen />;
       case 'planned': return <PlannedScreen />;
       case 'debts': return <DebtsScreen />;
       case 'history': return <HistoryScreen />;
@@ -64,6 +80,7 @@ const AppContent: React.FC = () => {
       <ExportImportModal />
       <SecurityLockModal />
       <ConfirmDeleteModal />
+      <AccountDetailsModal />
     </div>
   );
 };
