@@ -5982,6 +5982,7 @@ fun ProfileTab(
                     
                     Text(
                         text = "Developed & Created by Azwad Abrar Nabil",
+                        textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

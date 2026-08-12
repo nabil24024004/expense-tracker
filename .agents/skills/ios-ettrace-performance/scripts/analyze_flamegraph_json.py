@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Summarize ETTrace processed flamegraph JSON for performance triage.
 
-This helper intentionally accepts only the Homebrew ETTrace v1.1.0 processed
+This helper intentionally accepts only the Homebrew ETTrace v2.0.0 processed
 flamegraph shape: one `output_<thread>.json` file with a top-level `nodes`
 tree. ETTrace raw capture JSON usually lives under an `emerge-output/` temp
 folder and has keys such as `threads` and `libraryInfo`; this script rejects
 that shape because it has not been symbolicated into flamegraph nodes.
 
-ETTrace v1.1.0 stores `duration` as inclusive time on every real frame and
+ETTrace v2.0.0 stores `duration` as inclusive time on every real frame and
 appends an empty terminal child with zero duration to preserve same-name stack
 buckets. The strict validation here is deliberate: a malformed or legacy file
 should fail loudly instead of producing misleading hotspot evidence.
@@ -126,7 +126,7 @@ def children_of(node: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def node_weight(node: dict[str, Any]) -> float:
-    """Return the inclusive `duration` stored on one ETTrace v1.1.0 node."""
+    """Return the inclusive `duration` stored on one ETTrace v2.0.0 node."""
     if "duration" not in node:
         raise ValueError("Processed ETTrace node is missing `duration`.")
 
@@ -179,7 +179,7 @@ def collect_frame_weights(
 
 
 def thread_root_node(payload: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the top-level `nodes` tree from ETTrace v1.1.0 processed JSON."""
+    """Return the top-level `nodes` tree from ETTrace v2.0.0 processed JSON."""
     root = payload.get("nodes")
     if isinstance(root, dict):
         return root
@@ -198,7 +198,7 @@ def parse_flamegraph(path: Path):
     if "threadNodes" in payload:
         raise ValueError(
             "This looks like an intermediate or legacy ETTrace flamegraph shape with `threadNodes`. "
-            "Use Homebrew ETTrace v1.1.0 output_<thread>.json with top-level `nodes`.",
+            "Use Homebrew ETTrace v2.0.0 output_<thread>.json with top-level `nodes`.",
         )
 
     if "threads" in payload and "libraryInfo" in payload:
@@ -265,7 +265,7 @@ def main() -> None:
     parser.add_argument(
         "json",
         type=Path,
-        help="Path to ETTrace v1.1.0 processed output_<thread>.json.",
+        help="Path to ETTrace v2.0.0 processed output_<thread>.json.",
     )
     parser.add_argument("--top", type=int, default=40, help="Number of rows to print per section.")
     parser.add_argument(

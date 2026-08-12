@@ -37,7 +37,7 @@ brew install emergetools/homebrew-tap/ettrace
 ```
 
 `ettrace` is the host-side macOS runner. The app must also link an `ETTrace.xcframework` for the iOS Simulator architecture.
-This workflow is validated for ETTrace v1.1.0 processed `output_<thread>.json` files with top-level `nodes`.
+This workflow is validated for ETTrace v2.0.0 processed `output_<thread>.json` files with top-level `nodes`.
 
 ## Link ETTrace Into The App
 
@@ -54,7 +54,7 @@ Preferred options:
 Build a simulator framework when needed:
 
 ```bash
-ETTRACE_TAG="${ETTRACE_TAG:-v1.1.0}" # Override to match the installed runner when Homebrew updates.
+ETTRACE_TAG="${ETTRACE_TAG:-v2.0.0}" # Override to match the installed runner when Homebrew updates.
 ETTRACE_SRC="$RUN_DIR/ETTrace-src"
 if [ ! -d "$ETTRACE_SRC" ]; then
   git clone --depth 1 --branch "$ETTRACE_TAG" https://github.com/EmergeTools/ETTrace "$ETTRACE_SRC"

@@ -541,7 +541,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                             onClick = { onboardingStep = 4 },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(56.dp),
+                                .heightIn(min = 56.dp),
                             shape = RoundedCornerShape(28.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = TextPrimary,
@@ -550,6 +550,7 @@ fun OnboardingScreen(viewModel: MainViewModel, onOnboardingComplete: () -> Unit)
                         ) {
                             Text(
                                 text = "START TRACKING YOUR LIFE",
+                                textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 1.sp
